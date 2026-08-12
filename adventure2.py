@@ -10,6 +10,15 @@ import importlib.util # Para cargar mundos en tiempo de ejecución
 from PIL import Image # Necesario para cargar frames de GIFs
 sys.path.append('worlds') # Añade la carpeta de datos al path
 pygame.init()
+# --- Carga de la definición de elementos desde elements.json ---
+import elements
+ELEMENTS = elements.ELEMENTS
+GAME_RULES = elements.GAME_RULES
+# Constantes derivadas de las reglas del JSON
+FLEE_ITEMS = set(GAME_RULES.get('dragon', {}).get('flees_if_hero_has', []))
+VICTORY = GAME_RULES.get('victory', {})
+START_HEALTH = GAME_RULES.get('hero', {}).get('start_health', 4)
+START_ROOM = GAME_RULES.get('hero', {}).get('start_room', 0)
 # El import de atari_2600_world_1 debe estar después de la definición de constantes si las usa
 from atari_2600_world_1 import *
 
@@ -108,30 +117,10 @@ sfx_hero_death = mixer.Sound('assets/sounds/sfx_hero_death.wav')
 sfx_take = mixer.Sound('assets/sounds/sfx_take.wav')
 sfx_win = mixer.Sound('assets/sounds/sfx_win.wav')
 sfx_door_open = mixer.Sound('assets/sounds/sfx_door_open.wav')
-# --- Carga de recursos (imágenes de tiles) ---
-tile_images = {
-    'X': pygame.image.load('assets/images/rock_64.png').convert_alpha(),
-    'Y': pygame.image.load('assets/images/rock_64_gold.png').convert_alpha(),
-    'y': pygame.image.load('assets/images/rock_64_black.png').convert_alpha(),
-    'W': pygame.image.load('assets/images/water_64.png').convert_alpha(),
-    'B': pygame.image.load('assets/images/wood_64.png').convert_alpha(),
-    'D': pygame.image.load('assets/images/door_64.png').convert_alpha(),
-    ' ': pygame.image.load('assets/images/grass_64.png').convert_alpha(),
-    'w': pygame.image.load('assets/images/window_64.png').convert_alpha(),
-}
-
-# --- Carga de imagen para la espada ---
-sword_image = pygame.image.load('assets/images/sword.png').convert_alpha()
-
-# --- Carga de imagen para la llave ---
-key_image = pygame.image.load('assets/images/key_golden.png').convert_alpha()
-key_black_image = pygame.image.load('assets/images/key_black.png').convert_alpha()
-
-# --- Carga de imagen para el trofeo ---
-trophy_image = pygame.image.load('assets/images/trophy.png').convert_alpha()
-
-# --- Carga de imagen para el altar ---
-altar_image = pygame.image.load('assets/images/altar.png').convert_alpha()
+# --- Carga de imágenes de tiles/items desde elements.json ---
+tile_images, item_images = elements.build_element_surfaces()
+# --- Frames de los elementos animados (p. ej. el agua que gira 90° cada 250 ms) ---
+ANIMATED = elements.build_animations()
 
 # --- Carga de imagen de Game Over ---
 gameover_image = pygame.image.load('assets/images/game_over_win.png').convert_alpha()
@@ -161,6 +150,7 @@ def build_map_surface(map_data, hero):
     collision_rects = []
     door_rects = [] # Nueva lista para las puertas
     item_rects = []
+    animated_rects = [] # Celdas de elementos animados (p. ej. agua)
     processed_coords = set() # Para evitar procesar celdas ocupadas por objetos grandes
     x, y = 0, 0 # Dibuja en la superficie local desde (0,0)
     for row_idx, row in enumerate(map_data):
@@ -169,37 +159,36 @@ def build_map_surface(map_data, hero):
                 x += CELL
                 continue
 
-            # Dibuja el tile base. Si es un item, dibuja hierba debajo.
-            # La puerta del castillo negro 'd' usa la misma imagen que la dorada 'D'.
-            base_tile = ' ' if cell_char in 'SKbTA' else ('D' if cell_char == 'd' else cell_char)
-            if base_tile in tile_images:
-                map_surface.blit(tile_images[base_tile], (x, y))
+            # Dibuja el tile base. Si el elemento define draws_under (items, agua),
+            # se dibuja ese tile debajo; si no, el propio elemento.
+            base_char = elements.draws_under(cell_char) or cell_char
+            if base_char in tile_images:
+                map_surface.blit(tile_images[base_char], (x, y))
 
-            # Gestiona colisiones y objetos especiales
-            if cell_char in 'XYWy': # Muros (roca, roca dorada, roca negra) y agua causan colisión
+            # Gestiona colisiones y objetos especiales según el tipo del elemento
+            kind = elements.kind_of(cell_char)
+            if cell_char in ANIMATED: # Elemento animado: no se hornea en el mapa estático
+                animated_rects.append({'char': cell_char, 'rect': pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL, CELL)})
+                if elements.solid(cell_char):
+                    collision_rects.append(pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL, CELL))
+            elif kind == 'terrain' and elements.solid(cell_char): # Muros (roca, madera, ventana...)
                 collision_rects.append(pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL, CELL))
-            elif cell_char in 'Dd': # Las puertas van a su propia lista, con su color
-                door_type = 'gold' if cell_char == 'D' else 'black'
-                door_rects.append({'type': door_type, 'rect': pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL, CELL)})
-            elif cell_char == 'S' and 'sword' not in hero['inventory']:
-                item_rects.append({'type': 'sword', 'rect': pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL, CELL)})
-            elif cell_char == 'K' and 'key' not in hero['inventory']:
-                item_rects.append({'type': 'key', 'rect': pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL, CELL)})
-            elif cell_char == 'b' and 'key_black' not in hero['inventory']:
-                item_rects.append({'type': 'key_black', 'rect': pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL, CELL)})
-            elif cell_char == 'T' and 'trophy' not in hero['inventory']:
-                item_rects.append({'type': 'trophy', 'rect': pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL, CELL)})
-            elif cell_char == 'A':
-                # Dibuja un fondo de hierba de 4x4 para el altar
-                for r_offset in range(4):
-                    for c_offset in range(4):
+            elif kind == 'door': # Las puertas van a su propia lista
+                door_rects.append({'char': cell_char, 'key_char': elements.door_opens_with(cell_char), 'rect': pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL, CELL)})
+            elif kind in ('key', 'item') and elements.key_inventory_id(cell_char) not in hero['inventory']:
+                item_rects.append({'type': elements.key_inventory_id(cell_char), 'char': cell_char, 'rect': pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL, CELL)})
+            elif kind == 'altar':
+                size_w, size_h = elements.element_size(cell_char)
+                # Dibuja un fondo de hierba de size×size para el altar
+                for r_offset in range(size_h):
+                    for c_offset in range(size_w):
                         map_surface.blit(tile_images[' '], (x + c_offset * CELL, y + r_offset * CELL))
-                altar_rect = pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL * 4, CELL * 4)
-                item_rects.append({'type': 'altar', 'rect': altar_rect})
+                altar_rect = pygame.Rect(x, y + TOP_BAR_HEIGHT, CELL * size_w, CELL * size_h)
+                item_rects.append({'type': 'altar', 'char': cell_char, 'rect': altar_rect})
                 collision_rects.append(altar_rect) # El altar vuelve a ser una colisión sólida
                 # Marca las celdas que ocupa el altar como ya procesadas
-                for r_offset in range(4):
-                    for c_offset in range(4):
+                for r_offset in range(size_h):
+                    for c_offset in range(size_w):
                         # Asegúrate de no salirte de los límites del mapa si el altar está en un borde
                         if row_idx + r_offset < len(map_data) and col_idx + c_offset < len(map_data[0]):
                             processed_coords.add((row_idx + r_offset, col_idx + c_offset))
@@ -207,7 +196,7 @@ def build_map_surface(map_data, hero):
             x += CELL
         x = 0
         y += CELL
-    return map_surface, collision_rects, item_rects, door_rects
+    return map_surface, collision_rects, item_rects, door_rects, animated_rects
 
 def update_player(player, collision_rects, door_rects, current_map_data, dt):
     """Maneja la entrada, movimiento, animación y colisión del jugador."""
@@ -263,7 +252,7 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
     original_player_x = player['rect'].x
     original_player_y = player['rect'].y
 
-    opened_doors = set() # Colores de puerta ('gold'/'black') que el héroe puede abrir
+    opened_doors = set() # Chars de puerta que el héroe puede abrir
     collided_on_x = False
     collided_on_y = False
 
@@ -286,12 +275,12 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
     # Comprueba colisión con puertas en X
     for door_rect in door_rects:
         if current_collision_rect.colliderect(door_rect['rect']):
-            door_key = 'key' if door_rect['type'] == 'gold' else 'key_black'
+            door_key = elements.key_inventory_id(door_rect['key_char'])
             if door_key in player['inventory']:
-                # Si tiene la llave del color correcto, notifica al bucle principal
-                opened_doors.add(door_rect['type'])
+                # Si tiene la llave correcta, notifica al bucle principal
+                opened_doors.add(door_rect['char'])
             else:
-                # Si no tiene la llave del color correcto, la puerta actúa como un muro.
+                # Si no tiene la llave, la puerta actúa como un muro.
                 collided_on_x = True
 
     if collided_on_x:
@@ -320,9 +309,9 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
     # Comprueba colisión con puertas en Y (se repite por si el movimiento fue solo vertical)
     for door_rect in door_rects:
         if current_collision_rect.colliderect(door_rect['rect']):
-            door_key = 'key' if door_rect['type'] == 'gold' else 'key_black'
+            door_key = elements.key_inventory_id(door_rect['key_char'])
             if door_key in player['inventory']:
-                opened_doors.add(door_rect['type'])
+                opened_doors.add(door_rect['char'])
             else:
                 collided_on_y = True
 
@@ -383,9 +372,9 @@ def update_dragon(dragon, player, dt):
     should_move = True
     fleeing = False
 
-    # Si el jugador tiene la espada, el dragón cambia su comportamiento:
-    # nunca lo persigue. Huye y, si puede, escapa de la sala.
-    if 'sword' in player['inventory']:
+    # Si el jugador lleva un item que hace huir al dragón (p. ej. la espada),
+    # cambia su comportamiento: nunca lo persigue. Huye y, si puede, escapa de la sala.
+    if FLEE_ITEMS & set(player['inventory']):
         fleeing = True
         # Invierte el vector: se aleja siempre del héroe
         dx *= -1
@@ -447,13 +436,13 @@ def reset_game_state(hero, dragon, show_transition=True):
         pygame.time.wait(2000)
 
     # Reinicia el estado
-    currentMap = 0
+    currentMap = START_ROOM
     hero["rect"].center = (WIDTH / 2, TOP_BAR_HEIGHT + GAME_HEIGHT - CELL * 2.5)
     hero["direction"] = 'right'
     hero["frame_index"] = 0
     hero["inventory"] = [] # Vacía el inventario al reiniciar
     hero["dragons_killed"] = 0 # Reinicia el contador de dragones
-    hero["health"] = 4 # Restablece la energía al máximo
+    hero["health"] = START_HEALTH # Restablece la energía al máximo
     hero["last_damage_time"] = 0 # Sin enfriamiento de daño pendiente
     hero["image"] = hero_images[0] # Restaura el sprite normal del héroe
     dragon["x"] = float(CELL)
@@ -466,11 +455,11 @@ def reset_game_state(hero, dragon, show_transition=True):
     dragon['knockback_remaining'] = 0 # Cancela cualquier rechazo en curso
     dragon_respawn_room = -1 # El dragón no está esperando para reaparecer
 
-    map_surface, collision_rects, item_rects, door_rects = build_map_surface(maps[currentMap][1], hero)
+    map_surface, collision_rects, item_rects, door_rects, animated_rects = build_map_surface(maps[currentMap][1], hero)
     # El dragón se desactiva al reiniciar
     dragon_is_active = maps[currentMap][2]
 
-    return currentMap, map_surface, collision_rects, item_rects, door_rects, dragon_is_active, dragon_respawn_room, pygame.time.get_ticks()
+    return currentMap, map_surface, collision_rects, item_rects, door_rects, animated_rects, dragon_is_active, dragon_respawn_room, pygame.time.get_ticks()
 
 def list_world_files():
     """Devuelve la lista de archivos de mundo (.py) disponibles en la carpeta worlds."""
@@ -483,7 +472,7 @@ def list_world_files():
 
 def load_world_file(filename):
     """Carga un mundo desde la carpeta worlds y reinicia la partida."""
-    global maps, currentMap, map_surface, collision_rects, item_rects, door_rects
+    global maps, currentMap, map_surface, collision_rects, item_rects, door_rects, animated_rects
     global dragon_is_active, dragon_respawn_room, start_time, opening_doors
     path = os.path.join('worlds', filename)
     try:
@@ -495,13 +484,13 @@ def load_world_file(filename):
         return False
 
     maps = new_maps
-    currentMap = 0
+    currentMap = START_ROOM
     hero["rect"].center = (WIDTH / 2, TOP_BAR_HEIGHT + GAME_HEIGHT - CELL * 2.5)
     hero["direction"] = 'right'
     hero["frame_index"] = 0
     hero["inventory"] = [] # Vacía el inventario
     hero["dragons_killed"] = 0
-    hero["health"] = 4 # Restablece la energía al máximo
+    hero["health"] = START_HEALTH # Restablece la energía al máximo
     dragon["x"] = float(CELL)
     dragon["y"] = float(TOP_BAR_HEIGHT + CELL)
     sync_dragon_rect(dragon)
@@ -512,7 +501,7 @@ def load_world_file(filename):
     dragon['knockback_remaining'] = 0 # Cancela cualquier rechazo en curso
     dragon_respawn_room = -1
     opening_doors = []
-    map_surface, collision_rects, item_rects, door_rects = build_map_surface(maps[currentMap][1], hero)
+    map_surface, collision_rects, item_rects, door_rects, animated_rects = build_map_surface(maps[currentMap][1], hero)
     dragon_is_active = maps[currentMap][2]
     start_time = pygame.time.get_ticks()
     return True
@@ -701,14 +690,14 @@ hero = {
     "image": hero_images[0],
     "inventory": [], # El inventario ahora es una lista
     "dragons_killed": 0,
-    "health": 4, # Energía del héroe (4 tramos)
+    "health": START_HEALTH, # Energía del héroe (4 tramos)
     "last_damage_time": 0 # Momento (ms) del último golpe del dragón para el enfriamiento de daño
 }
 hero["rect"].center = (WIDTH / 2, TOP_BAR_HEIGHT + GAME_HEIGHT - CELL * 2.5)
 
 # --- Inicialización del juego ---
-currentMap = 0
-map_surface, collision_rects, item_rects, door_rects = build_map_surface(maps[currentMap][1], hero)
+currentMap = START_ROOM
+map_surface, collision_rects, item_rects, door_rects, animated_rects = build_map_surface(maps[currentMap][1], hero)
 # El dragón está inactivo al principio. Se activará cuando el jugador entre en una sala de dragones.
 dragon_is_active = False
 # -1 significa que no está esperando para reaparecer. Un valor >= 0 es la sala donde reaparecerá.
@@ -822,7 +811,7 @@ while not gameOver:
                     gameOver = True
             if event.key == pygame.K_F2:
                 # Reinicia la partida al instante
-                currentMap, map_surface, collision_rects, item_rects, door_rects, dragon_is_active, dragon_respawn_room, start_time = reset_game_state(hero, dragon, show_transition=False)
+                currentMap, map_surface, collision_rects, item_rects, door_rects, animated_rects, dragon_is_active, dragon_respawn_room, start_time = reset_game_state(hero, dragon, show_transition=False)
                 continue
             if event.key == pygame.K_ESCAPE:
                 if show_pause_menu(gameScreen):
@@ -839,20 +828,18 @@ while not gameOver:
 
         # Añade las puertas abiertas a la lista de animación antes de que desaparezcan de las colisiones
         for door_rect in door_rects:
-            if door_rect['type'] in opened_doors:
+            if door_rect['char'] in opened_doors:
                 opening_doors.append({'rect': door_rect['rect'].copy(), 'slide': 0})
 
-        # Abre solo las puertas del color correspondiente a la llave usada
-        if 'gold' in opened_doors:
-            # Se usó la llave dorada: la llave 'K' desaparece del mapa y se abren las puertas 'D'
-            maps[currentMap][1] = [row.replace('K', ' ') for row in maps[currentMap][1]]
-            maps[currentMap][1] = [row.replace('D', ' ') for row in maps[currentMap][1]]
-        if 'black' in opened_doors:
-            # Se usó la llave negra: la llave 'b' desaparece del mapa y se abren las puertas 'd'
-            maps[currentMap][1] = [row.replace('b', ' ') for row in maps[currentMap][1]]
-            maps[currentMap][1] = [row.replace('d', ' ') for row in maps[currentMap][1]]
+        # Abre las puertas: se borran del mapa la puerta y su llave
+        if GAME_RULES.get('doors', {}).get('erase_door_and_key_on_open', True):
+            for door_char in opened_doors:
+                key_char = elements.door_opens_with(door_char)
+                maps[currentMap][1] = [row.replace(door_char, ' ') for row in maps[currentMap][1]]
+                if key_char:
+                    maps[currentMap][1] = [row.replace(key_char, ' ') for row in maps[currentMap][1]]
 
-        map_surface, collision_rects, item_rects, door_rects = build_map_surface(maps[currentMap][1], hero)
+        map_surface, collision_rects, item_rects, door_rects, animated_rects = build_map_surface(maps[currentMap][1], hero)
 
     if dragon_is_active:
         dragon_escaped = update_dragon(dragon, hero, dt) # La IA ahora depende del estado del héroe
@@ -871,7 +858,7 @@ while not gameOver:
         )
         # Comprueba colisión entre héroe y dragón
         if hero_collision_rect.colliderect(dragon['rect']):
-            if 'sword' in hero['inventory']:
+            if FLEE_ITEMS & set(hero['inventory']):
                 # El héroe derrota al dragón
                 sfx_dragon_death.play()
                 hero['dragons_killed'] += 1
@@ -909,27 +896,30 @@ while not gameOver:
                         if not play_death_sequence(gameScreen, hero, dragon, map_surface):
                             gameOver = True # El jugador cerró la ventana durante la secuencia
                             continue
-                        currentMap, map_surface, collision_rects, item_rects, door_rects, dragon_is_active, dragon_respawn_room, start_time = reset_game_state(hero, dragon)
+                        currentMap, map_surface, collision_rects, item_rects, door_rects, animated_rects, dragon_is_active, dragon_respawn_room, start_time = reset_game_state(hero, dragon)
                         # Continúa al siguiente ciclo para evitar procesar el resto de la lógica con el estado antiguo
                         continue
 
     # --- Lógica de Items ---
     hero_collision_rect = pygame.Rect(hero['rect'].centerx - HERO_COLLISION_WIDTH // 2, hero['rect'].y + (HERO_HEIGHT - HERO_COLLISION_HEIGHT), HERO_COLLISION_WIDTH, HERO_COLLISION_HEIGHT)
     for item in item_rects[:]: # Itera sobre una copia para poder modificar la lista
-        if item['type'] != 'altar' and hero_collision_rect.colliderect(item['rect']):
+        if item.get('char') and elements.kind_of(item['char']) in ('key', 'item') and hero_collision_rect.colliderect(item['rect']):
             new_item_type = item['type']
             hero['inventory'].append(new_item_type) # Añade el nuevo objeto al inventario
             item_rects.remove(item) # El objeto desaparece del suelo
             sfx_take.play() # Sonido al recoger un objeto
 
     # --- CONDICIÓN DE VICTORIA ---
-    # El juego termina cuando el héroe, con el trofeo en el inventario,
-    # colisiona con el altar. El altar es sólido y el héroe rebota al tocarlo,
+    # El juego termina cuando el héroe, con los items requeridos en el inventario
+    # (según rules.victory de elements.json), colisiona con el elemento indicado
+    # (p. ej. el trofeo + el altar). El altar es sólido y el héroe rebota al tocarlo,
     # por eso se usa un rect de detección un poco más grande.
-    if 'trophy' in hero['inventory']:
+    victory_items = set(VICTORY.get('items_required', []))
+    victory_target = VICTORY.get('interact_with')
+    if victory_items and victory_target and victory_items <= set(hero['inventory']):
         altar_detection_rect = hero_collision_rect.inflate(CELL, CELL)
         for item in item_rects:
-            if item['type'] == 'altar' and altar_detection_rect.colliderect(item['rect']):
+            if item.get('char') == victory_target and altar_detection_rect.colliderect(item['rect']):
                 sfx_win.play() # Sonido de victoria
                 gameScreen.fill('black')
                 gameover_rect = gameover_image.get_rect(center=gameScreen.get_rect().center)
@@ -973,7 +963,7 @@ while not gameOver:
 
     if mapChange:
         # Reconstruye los sprites del mapa solo cuando es necesario
-        map_surface, collision_rects, item_rects, door_rects = build_map_surface(maps[currentMap][1], hero)
+        map_surface, collision_rects, item_rects, door_rects, animated_rects = build_map_surface(maps[currentMap][1], hero)
         # Si el dragón no estaba activo, comprueba si debe activarse en esta nueva sala.
         # Una vez activo, permanece activo.
         if not dragon_is_active:
@@ -1026,18 +1016,19 @@ while not gameOver:
 
     # Dibuja el área de juego
     gameScreen.blit(map_surface, (0, TOP_BAR_HEIGHT)) # El mapa se dibuja debajo de la barra superior
+    # Dibuja el agua animada: el tile gira 90° cada 250 ms
+    if animated_rects:
+        for anim_rect in animated_rects:
+            anim = ANIMATED.get(anim_rect['char'])
+            if anim:
+                frames = anim['frames']
+                frame = frames[(pygame.time.get_ticks() // anim['interval_ms']) % len(frames)]
+                gameScreen.blit(frame, anim_rect['rect'])
     # Dibuja los items que queden en el mapa
     for item in item_rects:
-        if item['type'] == 'sword':
-            gameScreen.blit(sword_image, item['rect'])
-        elif item['type'] == 'key':
-            gameScreen.blit(key_image, item['rect'])
-        elif item['type'] == 'key_black':
-            gameScreen.blit(key_black_image, item['rect'])
-        elif item['type'] == 'trophy':
-            gameScreen.blit(trophy_image, item['rect'])
-        elif item['type'] == 'altar':
-            gameScreen.blit(altar_image, item['rect'])
+        img = item_images.get(item['type'])
+        if img:
+            gameScreen.blit(img, item['rect'])
     gameScreen.blit(hero['image'], hero['rect'])
 
     # --- Dibuja y actualiza la animación de las puertas que se deslizan hacia los lados ---
@@ -1064,17 +1055,11 @@ while not gameOver:
     pygame.draw.rect(gameScreen, 'black', (0, TOP_BAR_HEIGHT + GAME_HEIGHT, WIDTH, BOTTOM_BAR_HEIGHT))
     # Dibuja todos los objetos que el héroe tenga en el inventario
     inventory_x_offset = 10
-    if 'sword' in hero['inventory']:
-        gameScreen.blit(sword_image, (inventory_x_offset, TOP_BAR_HEIGHT + GAME_HEIGHT + (BOTTOM_BAR_HEIGHT - sword_image.get_height()) // 2))
-        inventory_x_offset += sword_image.get_width() + 10
-    if 'key' in hero['inventory']:
-        gameScreen.blit(key_image, (inventory_x_offset, TOP_BAR_HEIGHT + GAME_HEIGHT + (BOTTOM_BAR_HEIGHT - key_image.get_height()) // 2))
-        inventory_x_offset += key_image.get_width() + 10
-    if 'key_black' in hero['inventory']:
-        gameScreen.blit(key_black_image, (inventory_x_offset, TOP_BAR_HEIGHT + GAME_HEIGHT + (BOTTOM_BAR_HEIGHT - key_black_image.get_height()) // 2))
-        inventory_x_offset += key_black_image.get_width() + 10
-    if 'trophy' in hero['inventory']:
-        gameScreen.blit(trophy_image, (inventory_x_offset, TOP_BAR_HEIGHT + GAME_HEIGHT + (BOTTOM_BAR_HEIGHT - trophy_image.get_height()) // 2))
+    for inv_id in item_images:
+        if inv_id in hero['inventory']:
+            img = item_images[inv_id]
+            gameScreen.blit(img, (inventory_x_offset, TOP_BAR_HEIGHT + GAME_HEIGHT + (BOTTOM_BAR_HEIGHT - img.get_height()) // 2))
+            inventory_x_offset += img.get_width() + 10
 
     pygame.display.flip()
 

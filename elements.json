@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "elements": {
+    " ": {
+      "name": "Hierba",
+      "image": "grass_64.png",
+      "solid": false,
+      "kind": "terrain"
+    },
+    "X": {
+      "name": "Roca",
+      "image": "rock_64.png",
+      "solid": true,
+      "kind": "terrain"
+    },
+    "Y": {
+      "name": "Roca de oro",
+      "image": "rock_64_gold.png",
+      "solid": true,
+      "kind": "terrain"
+    },
+    "y": {
+      "name": "Roca negra",
+      "image": "rock_64_black.png",
+      "solid": true,
+      "kind": "terrain"
+    },
+    "W": {
+      "name": "Agua",
+      "image": "water_64.png",
+      "solid": true,
+      "kind": "terrain",
+      "draws_under": " ",
+      "animation": {
+        "type": "rotate",
+        "interval_ms": 250
+      }
+    },
+    "B": {
+      "name": "Madera",
+      "image": "wood_64.png",
+      "solid": false,
+      "kind": "terrain"
+    },
+    "D": {
+      "name": "Puerta dorada",
+      "image": "door_64.png",
+      "solid": true,
+      "kind": "door",
+      "opens_with": "K"
+    },
+    "d": {
+      "name": "Puerta negra",
+      "image": "door_64.png",
+      "solid": true,
+      "kind": "door",
+      "opens_with": "b"
+    },
+    "w": {
+      "name": "Ventana",
+      "image": "window_64.png",
+      "solid": true,
+      "kind": "terrain"
+    },
+    "K": {
+      "name": "Llave de oro",
+      "image": "key_golden.png",
+      "solid": false,
+      "kind": "key",
+      "inventory_id": "key",
+      "draws_under": " "
+    },
+    "b": {
+      "name": "Llave negra",
+      "image": "key_black.png",
+      "solid": false,
+      "kind": "key",
+      "inventory_id": "key_black",
+      "draws_under": " "
+    },
+    "S": {
+      "name": "Espada",
+      "image": "sword.png",
+      "solid": false,
+      "kind": "item",
+      "inventory_id": "sword",
+      "draws_under": " ",
+      "effects": {
+        "dragon": "flee"
+      }
+    },
+    "T": {
+      "name": "Trofeo",
+      "image": "trophy.png",
+      "solid": false,
+      "kind": "item",
+      "inventory_id": "trophy",
+      "draws_under": " "
+    },
+    "A": {
+      "name": "Altar",
+      "image": "altar.png",
+      "solid": true,
+      "kind": "altar",
+      "inventory_id": "altar",
+      "draws_under": " ",
+      "size": [
+        4,
+        4
+      ]
+    }
+  },
+  "rules": {
+    "hero": {
+      "start_health": 4,
+      "max_health": 4,
+      "start_room": 0
+    },
+    "dragon": {
+      "flees_if_hero_has": [
+        "sword"
+      ],
+      "respawn_random_room": true
+    },
+    "victory": {
+      "items_required": [
+        "trophy"
+      ],
+      "interact_with": "A"
+    },
+    "doors": {
+      "erase_door_and_key_on_open": true
+    }
+  }
+}

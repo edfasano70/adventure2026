@@ -5,15 +5,16 @@ Pygame homage to Atari 2600 Adventure. No git repo, no packaging, no tests. All 
 ## Running
 
 - Game: `python3 adventure2.py` (requires a display; pygame 2.6 + Pillow installed).
-- World editor: `python3 world_editor.py`.
+- World editor: `python3 world_editor.py` — **based on PyQt5** (not pygame; needs PyQt5 installed). The game itself is still pygame; only the editor is Qt.
 - **Always run from the repo root.** Both programs use relative paths (`assets/`, `worlds/`, `settings.json`) and fail if launched elsewhere.
 - `settings.json` is auto-written at runtime by the game (tracks `fullscreen`/`volume`); don't hand-edit it unless you know what you're doing.
-- There is no test suite. `tests/` holds old standalone prototypes that are broken/outdated (`tests/hero.py` references an undefined `Banner()`) — do not rely on them.
+- There is no test suite. The old broken/outdated standalone prototypes (`hero.py`, `maze.py`) now live in `obsolete/tests/` — do not rely on them.
 
 ## Architecture
 
-- `adventure2.py` (monolith, ~1060 lines) — the whole game: assets, input, collision, dragon AI, maps, UI, main loop. State is held in dicts (`hero`, `dragon`) and module globals.
-- `world_editor.py` — mouse-free tile editor for building/editing world files. Saves/loads the same format the game reads.
+- `adventure2.py` (monolith, ~1060 lines) — the whole game: input, collision, dragon AI, maps, UI, main loop. State is held in dicts (`hero`, `dragon`) and module globals.
+- `elements.py` + `elements.json` — **single source of truth for element definitions** (tiles/items/door/key/altar). Both `adventure2.py` and `world_editor.py` import `elements` and read all tile data from `elements.json`. `build_element_surfaces()`/`build_animations()` build pygame surfaces; `save_elements()` persists elements (the editor writes new custom elements here). Do not hardcode tile logic in the games — use `elements.solid()`, `elements.kind_of()`, `elements.door_opens_with()`, `elements.key_inventory_id()`, `elements.effects_of()`, etc.
+- `world_editor.py` — **PyQt5** tile editor for building/editing world files. Saves/loads the same format the game reads. The "Nuevo" dialog persists created elements to `elements.json` (flag `custom: true`) and reloads surfaces (via `build_pixmaps()`, no pygame needed).
 - `worlds/*.py` — pure data files (no logic). `worlds/atari_2600_world_1.py` is hardcoded as the default via `from atari_2600_world_1 import *` at the top of `adventure2.py` (line 14). Other worlds load at runtime from the Pause → "Cargar Mundo" menu, which scans `worlds/*.py`.
 - `assets/images/`, `assets/sounds/` — game resources. GIFs are loaded frame-by-frame with Pillow (`load_gif_frames`), PNGs via pygame.
 
@@ -25,7 +26,7 @@ Each room is `maps.append([[up, right, down, left], [grid_rows...], dragon, visi
 - Grid is exactly **20 columns × 13 rows** of tile chars. Mismatched rows are padded with spaces on load, so off-by-one column errors silently produce grass.
 - `dragon` (bool): room starts the dragon active. `visibility` (int): fog radius; `>= 1000` means no fog.
 
-Tile legend:
+Tile legend (chars defined in `elements.json` — always use `elements` module helpers, never hardcode):
 
 | Char | Meaning | Notes |
 |---|---|---|
@@ -45,4 +46,4 @@ Dragon behavior gotcha: when the hero has the sword, the dragon never attacks an
 
 ## Editor usage quick reference
 
-Mouse + keyboard. A dropdown at the bottom-left shows the currently selected element; click it to choose from all built-in and custom tiles. A **"Nuevo"** button opens a dialog to create new elements (image path, name, char code, rigid flag, item type). Click the map to place the selected element. The cursor follows the mouse. Keyboard: arrows move cursor, `SPACE` rotates the selected element, `+`/`-` adjust connection/visibility values or room number (left/right mouse button do the same on those zones), `N` new room, `L` load, `S` save, `RETURN` deletes tile / clears a connection, `ESC` quits, `F11` toggles fullscreen. The window is resizable (content scales to fit). The filename is edited in the bottom bar; `S` saves to `worlds/<name>.py`. Corner zones toggle dragon/visibility/room number.
+Mouse + keyboard (PyQt). A combo box at the top selects the "pincel" (the currently placed element); click it to choose from all built-in and custom tiles. A **"Nuevo"** button opens a dialog to create new elements (image path, name, char code, rigid flag, item type). Click the map to place the selected element; right-click erases a tile in the grid / adjusts zones down. Keyboard: arrows move cursor, `SPACE` cycles the pincel (or toggles the dragon), `+`/`-` adjust connection/visibility values or room number (left/right mouse button do the same on those zones), `N` new room, `L` load, `S` save, `RETURN` deletes tile / clears a connection, `ESC` quits, `F11` toggles fullscreen. The map scales to fit the window. The filename is edited in the bottom bar (Enter saves); Load/Save/New-room buttons are in the bottom bar too. Corner zones toggle dragon/visibility/room number.
