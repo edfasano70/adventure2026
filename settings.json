@@ -1,4 +1,5 @@
 {
   "fullscreen": false,
-  "volume": 0.2
+  "volume": 0.2,
+  "dragon_flee_distance": 400
 }

@@ -25,16 +25,21 @@ from atari_2600_world_1 import *
 mixer.init()
 
 CONFIG_PATH = 'settings.json'
-DEFAULT_CONFIG = {'fullscreen': False, 'volume': 0.2}
+DEFAULT_CONFIG = {'fullscreen': False, 'volume': 0.2, 'dragon_flee_distance': 400}
 
 def load_config():
     """Carga la configuración guardada, completando los valores que falten."""
     config = dict(DEFAULT_CONFIG)
+    raw = {}
     try:
         with open(CONFIG_PATH) as f:
-            config.update(json.load(f))
+            raw = json.load(f)
+        config.update(raw)
     except Exception:
-        pass
+        raw = {}
+    # Si faltan claves (p. ej. dragon_flee_distance al actualizar), las escribe
+    if set(DEFAULT_CONFIG) - set(raw):
+        save_config(config)
     return config
 
 def save_config(config):
@@ -82,6 +87,9 @@ DOOR_SLIDE_SPEED = 3 # Píxeles por frame que se desliza la puerta al abrirse
 
 config = load_config()
 is_fullscreen = config.get('fullscreen', False)
+# Distancia a la que el dragón trata de mantenerse cuando el héroe lleva la espada
+DRAGON_FLEE_DISTANCE = int(config.get('dragon_flee_distance', 400))
+FLEE_DISTANCE_TOLERANCE = 40 # Tolerancia alrededor de la distancia ideal
 gameScreen  =   pygame.display.set_mode((WIDTH,SCREEN_HEIGHT), pygame.FULLSCREEN if is_fullscreen else 0)
 pygame.display.set_caption('Adventure 2024 - FanMade')
 pygame_icon = pygame.image.load('assets/images/atari_icon_32.png')
@@ -124,6 +132,9 @@ ANIMATED = elements.build_animations()
 
 # --- Carga de imagen de Game Over ---
 gameover_image = pygame.image.load('assets/images/game_over_win.png').convert_alpha()
+
+# --- Imagen de la muerte del dragón (aparece al derrotarlo y se desvanece) ---
+dragon_death_image = pygame.image.load('assets/images/dragon_death.png').convert_alpha()
 
 def load_gif_frames(path):
     """Carga los frames de un archivo GIF y los convierte a superficies de Pygame."""
@@ -336,7 +347,8 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
 def update_dragon(dragon, player, dt):
     """Maneja la IA de persecución y animación del dragón.
     El dragón vuela libremente (sin colisiones con muros).
-    Devuelve True si el dragón escapó de la sala mientras huía del héroe."""
+    Devuelve la dirección ('up'/'right'/'down'/'left') si el dragón escapó de la
+    sala huyendo del héroe, o False en caso contrario."""
     # --- Animación ---
     dragon['animation_timer'] += dt
     if dragon['animation_timer'] >= DRAGON_ANIMATION_INTERVAL:
@@ -373,12 +385,25 @@ def update_dragon(dragon, player, dt):
     fleeing = False
 
     # Si el jugador lleva un item que hace huir al dragón (p. ej. la espada),
-    # cambia su comportamiento: nunca lo persigue. Huye y, si puede, escapa de la sala.
+    # cambia su comportamiento: nunca lo persigue. Huye hasta la distancia ideal
+    # definida por DRAGON_FLEE_DISTANCE y luego trata de mantenerse a esa distancia.
     if FLEE_ITEMS & set(player['inventory']):
         fleeing = True
-        # Invierte el vector: se aleja siempre del héroe
-        dx *= -1
-        dy *= -1
+        if distance > 1:
+            if distance < DRAGON_FLEE_DISTANCE - FLEE_DISTANCE_TOLERANCE:
+                # Demasiado cerca: se aleja del héroe
+                dx *= -1
+                dy *= -1
+            elif distance > DRAGON_FLEE_DISTANCE + FLEE_DISTANCE_TOLERANCE:
+                # Demasiado lejos: se acerca para volver al radio ideal
+                pass
+            else:
+                # A la distancia ideal: orbita alrededor del héroe
+                # para mantenerse en el radio (movimiento tangencial)
+                tangent_x = -dy / distance
+                tangent_y = dx / distance
+                dx = tangent_x * dragon.get('orbit_dir', 1)
+                dy = tangent_y * dragon.get('orbit_dir', 1)
 
     # Mover solo si es necesario y si no está ya encima del jugador
     if should_move and distance > 1:
@@ -387,10 +412,14 @@ def update_dragon(dragon, player, dt):
         speed_px_per_sec = dragon['speed'] * 60
         target_speed = speed_px_per_sec * (dt / 1000)
 
-        # Normalizar vector y añadir una pequeña variabilidad (zigzag)
-        # para que la trayectoria no sea una línea recta perfecta.
-        norm_x = dx / distance + random.uniform(-0.15, 0.15)
-        norm_y = dy / distance + random.uniform(-0.15, 0.15)
+        # Normalizar el vector deseado (persecución, fuga u órbita) y añadir
+        # una pequeña variabilidad (zigzag) para que la trayectoria no sea recta.
+        vec_len = math.hypot(dx, dy)
+        if vec_len > 0:
+            norm_x = dx / vec_len + random.uniform(-0.15, 0.15)
+            norm_y = dy / vec_len + random.uniform(-0.15, 0.15)
+        else:
+            norm_x, norm_y = 0.0, 0.0
 
         move_x = norm_x * target_speed
         move_y = norm_y * target_speed
@@ -415,15 +444,91 @@ def update_dragon(dragon, player, dt):
 
     sync_dragon_rect(dragon)
 
-    # Si está huyendo y se salió de la sala, escapó y desaparece
-    if fleeing and (
-        dragon['rect'].right < 0 or
-        dragon['rect'].left > WIDTH or
-        dragon['rect'].bottom < TOP_BAR_HEIGHT or
-        dragon['rect'].top > TOP_BAR_HEIGHT + GAME_HEIGHT
-    ):
-        return True
+    # Si está huyendo y se salió de la sala, escapó: devuelve la dirección
+    # por la que salió para que pueda colocarse en la sala contigua.
+    if fleeing:
+        if dragon['rect'].right < 0:
+            return 'left'
+        if dragon['rect'].left > WIDTH:
+            return 'right'
+        if dragon['rect'].bottom < TOP_BAR_HEIGHT:
+            return 'up'
+        if dragon['rect'].top > TOP_BAR_HEIGHT + GAME_HEIGHT:
+            return 'down'
     return False
+
+# Índices de las conexiones de una sala: maps[sala][0] = [up, right, down, left]
+CONNECTION_INDEX = {'up': 0, 'right': 1, 'down': 2, 'left': 3}
+
+
+def contiguous_room(escape_dir, maps, currentMap):
+    """Devuelve la sala contigua a la que va el dragón.
+
+    Si escapó por una dirección, usa esa conexión del mapa; si no es válida
+    (-1 o la propia sala), elige cualquier otra conexión existente.
+    Devuelve None si la sala no tiene ninguna conexión."""
+    conns = maps[currentMap][0]
+    candidates = []
+    if escape_dir in CONNECTION_INDEX:
+        idx = CONNECTION_INDEX[escape_dir]
+        if 0 <= idx < len(conns):
+            candidates.append(conns[idx])
+    for c in conns:
+        if c not in candidates:
+            candidates.append(c)
+    for room in candidates:
+        if room >= 0 and room != currentMap:
+            return room
+    return None
+
+
+def center_dragon_in_room(dragon):
+    """Posiciona al dragón en el centro del área de juego de la sala actual."""
+    dragon['x'] = WIDTH / 2 - dragon['rect'].width / 2
+    dragon['y'] = TOP_BAR_HEIGHT + (GAME_HEIGHT - dragon['rect'].height) / 2
+    sync_dragon_rect(dragon)
+
+
+def play_dragon_death_sequence(screen, dragon, hero, map_surface, collision_rects, door_rects, current_map_data):
+    """Muestra la imagen de muerte del dragón unos segundos y la desvanece
+    lentamente, manteniendo al héroe visible y controlable en la escena.
+    Devuelve False solo si el jugador cierra la ventana."""
+    # Imagen de muerte escalada al tamaño del rect del dragón
+    death_img = pygame.transform.scale(dragon_death_image,
+                                       (dragon['rect'].width, dragon['rect'].height))
+    hold_ms = 1200  # Tiempo mostrando la imagen estática
+    fade_ms = 1500  # Duración del desvanecimiento
+    start = pygame.time.get_ticks()
+
+    while True:
+        dt = gameClock.tick(60)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
+        elapsed = pygame.time.get_ticks() - start
+
+        # El héroe sigue respondiendo al teclado durante la secuencia
+        update_player(hero, collision_rects, door_rects, current_map_data, dt)
+
+        screen.fill('black')
+        screen.blit(map_surface, (0, TOP_BAR_HEIGHT))
+        screen.blit(hero['image'], hero['rect'])
+
+        if elapsed < hold_ms:
+            screen.blit(death_img, dragon['rect'].topleft)
+        else:
+            # Fase de desvanecimiento progresivo
+            fade_elapsed = elapsed - hold_ms
+            alpha = max(0, 255 * (1 - fade_elapsed / fade_ms))
+            if alpha <= 0:
+                break
+            fading = death_img.copy()
+            fading.set_alpha(int(alpha))
+            screen.blit(fading, dragon['rect'].topleft)
+
+        pygame.display.flip()
+    return True
+
 
 def reset_game_state(hero, dragon, show_transition=True):
     """Resetea el estado del juego. Con show_transition=True muestra
@@ -454,6 +559,7 @@ def reset_game_state(hero, dragon, show_transition=True):
     dragon['image'] = dragon['images_r'][0]
     dragon['knockback_remaining'] = 0 # Cancela cualquier rechazo en curso
     dragon_respawn_room = -1 # El dragón no está esperando para reaparecer
+    dragon['pending_spawn_center'] = False # Sin reaparición pendiente en el centro
 
     map_surface, collision_rects, item_rects, door_rects, animated_rects = build_map_surface(maps[currentMap][1], hero)
     # El dragón se desactiva al reiniciar
@@ -500,6 +606,7 @@ def load_world_file(filename):
     dragon['image'] = dragon['images_r'][0]
     dragon['knockback_remaining'] = 0 # Cancela cualquier rechazo en curso
     dragon_respawn_room = -1
+    dragon['pending_spawn_center'] = False
     opening_doors = []
     map_surface, collision_rects, item_rects, door_rects, animated_rects = build_map_surface(maps[currentMap][1], hero)
     dragon_is_active = maps[currentMap][2]
@@ -729,7 +836,9 @@ dragon = {
     "direction": "right", # Dirección inicial
     "knockback_remaining": 0, # Píxeles que le quedan por alejarse (rechazo)
     "knockback_dir_x": 0.0, # Dirección del rechazo
-    "knockback_dir_y": 0.0
+    "knockback_dir_y": 0.0,
+    "pending_spawn_center": False, # True si al activarse debe aparecer en el centro de la sala
+    "orbit_dir": random.choice([-1, 1]) # Sentido en el que orbita al mantener la distancia
 }
 
 def sync_dragon_rect(dragon):
@@ -842,13 +951,21 @@ while not gameOver:
         map_surface, collision_rects, item_rects, door_rects, animated_rects = build_map_surface(maps[currentMap][1], hero)
 
     if dragon_is_active:
-        dragon_escaped = update_dragon(dragon, hero, dt) # La IA ahora depende del estado del héroe
-        if dragon_escaped:
-            # El dragón huyó y escapó de la sala: desaparece y reaparecerá en otra sala
+        escape_dir = update_dragon(dragon, hero, dt) # La IA ahora depende del estado del héroe
+        if escape_dir:
+            # El dragón huyó y escapó de la sala: se coloca dormido en el centro
+            # de la sala contigua hasta que el héroe entre en ella.
             dragon_is_active = False
-            possible_rooms = list(range(len(maps)))
-            possible_rooms.remove(currentMap)
-            dragon_respawn_room = random.choice(possible_rooms)
+            next_room = contiguous_room(escape_dir, maps, currentMap)
+            if next_room is not None:
+                dragon_respawn_room = next_room
+                dragon['pending_spawn_center'] = True
+                center_dragon_in_room(dragon)
+            else:
+                # Sala sin conexiones: fallback a una sala aleatoria
+                possible_rooms = list(range(len(maps)))
+                possible_rooms.remove(currentMap)
+                dragon_respawn_room = random.choice(possible_rooms)
         # Crea el rect de colisión del héroe para esta comprobación
         hero_collision_rect = pygame.Rect(
             hero['rect'].centerx - HERO_COLLISION_WIDTH // 2,
@@ -859,16 +976,26 @@ while not gameOver:
         # Comprueba colisión entre héroe y dragón
         if hero_collision_rect.colliderect(dragon['rect']):
             if FLEE_ITEMS & set(hero['inventory']):
-                # El héroe derrota al dragón
+                # El héroe derrota al dragón: secuencia de muerte con fundido
                 sfx_dragon_death.play()
                 hero['dragons_killed'] += 1
                 dragon['speed'] += 0.5 # Aumenta la velocidad para la próxima vez
-                dragon_is_active = False # El dragón desaparece
-                
-                # Elige una nueva sala de reaparición que no sea la actual
-                possible_rooms = list(range(len(maps)))
-                possible_rooms.remove(currentMap)
-                dragon_respawn_room = random.choice(possible_rooms)
+                dragon_is_active = False # El dragón desaparece tras la secuencia
+                if not play_dragon_death_sequence(gameScreen, dragon, hero, map_surface,
+                                                  collision_rects, door_rects, maps[currentMap][1]):
+                    gameOver = True # El jugador cerró la ventana durante la secuencia
+                    continue
+                # Reaparece dormido en el centro de una sala contigua
+                next_room = contiguous_room(None, maps, currentMap)
+                if next_room is not None:
+                    dragon_respawn_room = next_room
+                    dragon['pending_spawn_center'] = True
+                    center_dragon_in_room(dragon)
+                else:
+                    # Sala sin conexiones: fallback a una sala aleatoria
+                    possible_rooms = list(range(len(maps)))
+                    possible_rooms.remove(currentMap)
+                    dragon_respawn_room = random.choice(possible_rooms)
 
             else:
                 # Enfriamiento de daño: el héroe no puede perder otra vida
@@ -973,9 +1100,14 @@ while not gameOver:
             # O comprueba si el jugador ha entrado en la sala de reaparición
             elif currentMap == dragon_respawn_room:
                 dragon_is_active = True
-                dragon['x'] = float(CELL)
-                dragon['y'] = float(TOP_BAR_HEIGHT + CELL)
-                sync_dragon_rect(dragon)
+                if dragon.get('pending_spawn_center'):
+                    # Vino de una fuga o de una muerte: aparece en el centro
+                    dragon['pending_spawn_center'] = False
+                    center_dragon_in_room(dragon)
+                else:
+                    dragon['x'] = float(CELL)
+                    dragon['y'] = float(TOP_BAR_HEIGHT + CELL)
+                    sync_dragon_rect(dragon)
                 dragon_respawn_room = -1 # Resetea la sala de reaparición
                 
     # --- Dibujado ---
@@ -1046,8 +1178,10 @@ while not gameOver:
     # --- Dibuja la capa de visibilidad ---
     draw_visibility_fog(gameScreen, hero, maps[currentMap][3])
 
-    # Dibuja al dragón encima de la niebla: vuela por encima y siempre es visible
-    if dragon_is_active:
+    # Dibuja al dragón encima de la niebla: vuela por encima y siempre es visible.
+    # También se dibuja dormido (esperando en su sala de reaparición) si el héroe
+    # ya está en esa sala.
+    if dragon_is_active or dragon_respawn_room == currentMap:
         gameScreen.blit(dragon['image'], dragon['rect'])
 
     # --- Dibuja la Interfaz de Usuario (Inventario) ---

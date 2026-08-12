@@ -7,7 +7,7 @@ Pygame homage to Atari 2600 Adventure. No git repo, no packaging, no tests. All 
 - Game: `python3 adventure2.py` (requires a display; pygame 2.6 + Pillow installed).
 - World editor: `python3 world_editor.py` — **based on PyQt5** (not pygame; needs PyQt5 installed). The game itself is still pygame; only the editor is Qt.
 - **Always run from the repo root.** Both programs use relative paths (`assets/`, `worlds/`, `settings.json`) and fail if launched elsewhere.
-- `settings.json` is auto-written at runtime by the game (tracks `fullscreen`/`volume`); don't hand-edit it unless you know what you're doing.
+- `settings.json` is auto-written at runtime by the game (tracks `fullscreen`/`volume`/`dragon_flee_distance`); don't hand-edit it unless you know what you're doing.
 - There is no test suite. The old broken/outdated standalone prototypes (`hero.py`, `maze.py`) now live in `obsolete/tests/` — do not rely on them.
 
 ## Architecture
@@ -42,7 +42,7 @@ Tile legend (chars defined in `elements.json` — always use `elements` module h
 
 Items placed on `K b S T A` draw grass underneath (only the item renders).
 
-Dragon behavior gotcha: when the hero has the sword, the dragon never attacks and can escape the room, then respawns in a random other room. Death of the hero resets progress to room 0 with empty inventory.
+Dragon behavior gotcha: when the hero has the sword, the dragon never attacks and can escape the room (flies off-screen). On escape or death (hero touches it while fleeing), it relocates to the **contiguous room** in the escape direction (or any connected room) and waits **dormant but visible at the room's center** until the hero enters that room; `dragon['pending_spawn_center']` marks that it should activate at the center instead of the corner. Death of the dragon plays `dragon_death.png` with a fade-out before relocating. Death of the hero resets progress to room 0 with empty inventory.
 
 ## Editor usage quick reference
 
