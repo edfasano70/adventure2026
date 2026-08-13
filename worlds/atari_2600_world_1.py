@@ -1,8 +1,8 @@
 maps = []
 #------Sala 0
 maps.append([[11,0,1,0], [
-    'XXWWYwwYDDDDYwwYWWXX',
-    'X WWYYYYDDDDYYYYWW X',
+    'XXWWYwYwYDDYwYwYWWXX',
+    'X WWYYYYYDDYYYYYWW X',
     'X WWYYYYBBBBYYYYWW X',
     'X WWWWWWBBBBWWWWWW X',
     'X WWWWWWBBBBWWWWWW X',
@@ -201,8 +201,8 @@ maps.append([[10,6,7,8], [
 
 #------Sala 10
 maps.append([[12,0,9,0], [
-    'XXWWywwyddddywwyWWXX',
-    'X WWyyyyddddyyyyWW X',
+    'XXWWywywyddywywyWWXX',
+    'X WWyyyyyddyyyyyWW X',
     'X WWyyyyBBBByyyyWW X',
     'X WWWWWWBBBBWWWWWW X',
     'X WWWWWWBBBBWWWWWW X',
@@ -233,7 +233,7 @@ maps.append([[0,0,0,0], [
     'Y                  Y',
     'Y                  Y',
     'Y                  Y',
-    'YYYYYYYY    YYYYYYYY',
+    'YYYYYYYYY  YYYYYYYYY',
 ],
     False, # ¿Hay dragón en esta sala?
     1000] #visibilidad
@@ -253,7 +253,7 @@ maps.append([[13,0,10,0], [
     'y                  y',
     'y                  y',
     'y                  y',
-    'yyyyyyyy    yyyyyyyy',
+    'yyyyyyyyy  yyyyyyyyy',
 ],
     False, # ¿Hay dragón en esta sala?
     500] #visibilidad
@@ -278,4 +278,3 @@ maps.append([[0,0,12,0], [
     False, # ¿Hay dragón en esta sala?
     300] #visibilidad
 )
-

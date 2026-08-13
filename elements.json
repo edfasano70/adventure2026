@@ -108,12 +108,21 @@
         4,
         4
       ]
+    },
+    "f": {
+      "name": "Piso 1",
+      "image": "floor_1.png",
+      "solid": false,
+      "kind": "terrain",
+      "inventory_id": null,
+      "draws_under": null,
+      "custom": true
     }
   },
   "rules": {
     "hero": {
-      "start_health": 4,
-      "max_health": 4,
+      "start_health": 3,
+      "max_health": 3,
       "start_room": 0
     },
     "dragon": {

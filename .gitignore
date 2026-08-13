@@ -4,5 +4,8 @@ __pycache__/
 # Carpeta con archivos no usados por el juego ni el editor
 obsolete/
 
+# Recursos externos (texturas/imágenes de descarga) fuera del repo
+resources/
+
 # Configuración auto-escrita por el juego en tiempo de ejecución
 settings.json
