@@ -4,13 +4,15 @@ from pygame import mixer
 import math # Necesario para la IA de persecución
 import random # Necesario para la reaparición aleatoria
 import sys # Para poder importar desde subcarpetas
-import json # Para guardar y cargar la configuración del usuario
 import os # Para listar los archivos de mundos
 import importlib.util # Para cargar mundos en tiempo de ejecución
+import xml.etree.ElementTree as ET # Para guardar y cargar la configuración del usuario (XML)
 from PIL import Image # Necesario para cargar frames de GIFs
 sys.path.append('worlds') # Añade la carpeta de datos al path
+# La definición de elementos vive en core/
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'core'))
 pygame.init()
-# --- Carga de la definición de elementos desde elements.json ---
+# --- Carga de la definición de elementos desde core/elements.json ---
 import elements
 ELEMENTS = elements.ELEMENTS
 GAME_RULES = elements.GAME_RULES
@@ -24,16 +26,31 @@ from atari_2600_world_1 import *
 
 mixer.init()
 
-CONFIG_PATH = 'settings.json'
+# Configuración del usuario en XML, dentro de ~/.config/adventure2/
+CONFIG_DIR = os.path.join(os.path.expanduser('~'), '.config', 'adventure2')
+CONFIG_PATH = os.path.join(CONFIG_DIR, 'config.xml')
 DEFAULT_CONFIG = {'fullscreen': False, 'volume': 0.2}
 
 def load_config():
-    """Carga la configuración guardada, completando los valores que falten."""
+    """Carga la configuración XML guardada, completando los valores que falten."""
     config = dict(DEFAULT_CONFIG)
     raw = {}
     try:
-        with open(CONFIG_PATH) as f:
-            raw = json.load(f)
+        root = ET.parse(CONFIG_PATH).getroot()
+        for key, default in DEFAULT_CONFIG.items():
+            node = root.find(key)
+            if node is None or node.text is None:
+                continue
+            text = node.text.strip()
+            # Convierte el texto XML al tipo del valor por defecto
+            if isinstance(default, bool):
+                raw[key] = text.lower() in ('true', '1', 'yes', 'on')
+            elif isinstance(default, int):
+                raw[key] = int(text)
+            elif isinstance(default, float):
+                raw[key] = float(text)
+            else:
+                raw[key] = text
         config.update(raw)
     except Exception:
         raw = {}
@@ -43,10 +60,17 @@ def load_config():
     return config
 
 def save_config(config):
-    """Guarda la configuración en un archivo JSON."""
+    """Guarda la configuración en un archivo XML en ~/.config/adventure2/."""
     try:
-        with open(CONFIG_PATH, 'w') as f:
-            json.dump(config, f, indent=2)
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        root = ET.Element('config')
+        for key, value in config.items():
+            node = ET.SubElement(root, key)
+            if isinstance(value, bool):
+                node.text = 'true' if value else 'false'
+            else:
+                node.text = str(value)
+        ET.ElementTree(root).write(CONFIG_PATH, encoding='utf-8', xml_declaration=True)
     except Exception:
         pass
 
@@ -358,7 +382,7 @@ def update_dragon(dragon, player, dt):
     El dragón guarda su posición real (x, y). Cada frame calcula la separación
     respecto al héroe y avanza a su propia velocidad (dragon['speed']) hacia el
     radio deseado. Como el héroe es más rápido, puede dejarlo atrás: la distancia
-    real puede superar 500 px pero nunca el máximo DRAGON_SPAWN_DISTANCE (1000) px.
+    real puede superar 500 px pero nunca el máximo DRAGON_SPAWN_DISTANCE (2000) px.
     Sin espada el dragón se acerca hasta colisionar; con espada tiende a
     DRAGON_ORBIT_DISTANCE (500) px. Tras golpear al héroe queda congelado
     DRAGON_FROZEN_MS. Devuelve False."""
@@ -819,7 +843,7 @@ def sync_dragon_rect(dragon):
 
 def spawn_dragon(dragon, hero):
     """Coloca al dragón en el borde del círculo máximo (radio DRAGON_SPAWN_DISTANCE,
-    1000 px) alrededor del héroe, en un ángulo aleatorio. Puede quedar fuera de
+    2000 px) alrededor del héroe, en un ángulo aleatorio. Puede quedar fuera de
     pantalla; desde ahí se acerca o mantiene distancia según el inventario."""
     dragon['orbit_dir'] = random.choice([-1, 1])
     dragon['radius'] = DRAGON_SPAWN_DISTANCE
@@ -1026,7 +1050,7 @@ while not gameOver:
                                               item_rects, opening_doors, start_time):
                 gameOver = True # El jugador cerró la ventana durante la secuencia
                 continue
-            # Reaparece a 1000px en un ángulo aleatorio y vuelve a acercarse
+            # Reaparece a 2000px en un ángulo aleatorio y vuelve a acercarse
             spawn_dragon(dragon, hero)
 
         else:

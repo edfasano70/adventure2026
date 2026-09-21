@@ -3,11 +3,13 @@
 
 Sustituye al antiguo editor pygame. Usa elements.json como fuente única de
 datos de elementos (igual que el juego). Los mundos se guardan/cargan en el
-mismo formato world_file que lee adventure2.py (worlds/*.py).
+mismo formato world_file que lee main.py (worlds/*.py).
 """
 import os
 import sys
 import json
+# La definición de elementos vive en core/
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'core'))
 from PyQt5.QtCore import Qt, QRect, QSize
 from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt5.QtWidgets import (

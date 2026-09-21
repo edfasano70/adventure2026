@@ -6,6 +6,3 @@ obsolete/
 
 # Recursos externos (texturas/imágenes de descarga) fuera del repo
 resources/
-
-# Configuración auto-escrita por el juego en tiempo de ejecución
-settings.json

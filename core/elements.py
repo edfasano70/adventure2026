@@ -2,13 +2,15 @@
 """Carga y consulta la definición de los elementos del juego desde elements.json.
 
 Este módulo es la fuente única de datos sobre los elementos (tiles/items):
-tanto el juego (adventure2.py) como el editor (world_editor.py) lo usan.
+tanto el juego (main.py) como el editor (world_editor.py) lo usan.
 La lectura del JSON no requiere pygame; las superficies se construyen después
 de pygame.init() con build_element_surfaces() y build_animations().
 """
 import json
+import os
 
-ELEMENTS_PATH = 'elements.json'
+# El JSON vive junto a este módulo (core/), no en el cwd
+ELEMENTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'elements.json')
 
 # Valores por defecto de un elemento si el JSON no define alguno
 DEFAULTS = {
@@ -106,7 +108,6 @@ def animation_of(ch):
 # --- Construcción de superficies (requiere pygame.init() previo) ---
 def _resolve_image_path(path):
     """Resuelve una ruta de imagen: primero en assets/images/, luego tal cual."""
-    import os
     if not path:
         return None
     if os.path.exists(os.path.join('assets', 'images', path)):
