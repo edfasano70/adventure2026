@@ -26,8 +26,8 @@ from atari_2600_world_1 import *
 
 mixer.init()
 
-# Configuración del usuario en XML, dentro de ~/.config/adventure2/
-CONFIG_DIR = os.path.join(os.path.expanduser('~'), '.config', 'adventure2')
+# Configuración del usuario en XML, dentro de ~/.config/adventure2026/
+CONFIG_DIR = os.path.join(os.path.expanduser('~'), '.config', 'adventure2026')
 CONFIG_PATH = os.path.join(CONFIG_DIR, 'config.xml')
 DEFAULT_CONFIG = {'fullscreen': False, 'volume': 0.2}
 
@@ -60,7 +60,7 @@ def load_config():
     return config
 
 def save_config(config):
-    """Guarda la configuración en un archivo XML en ~/.config/adventure2/."""
+    """Guarda la configuración en un archivo XML en ~/.config/adventure2026/."""
     try:
         os.makedirs(CONFIG_DIR, exist_ok=True)
         root = ET.Element('config')

@@ -29,7 +29,8 @@ MAP_ROWS = GRID_H + 2  # Borde superior + cuadrícula + borde inferior
 LOGICAL_W = MAP_COLS * CELL
 LOGICAL_H = MAP_ROWS * CELL
 
-CONFIG_PATH = 'editor_settings.json'
+CONFIG_DIR = os.path.join('.', 'config', 'adventure2')
+CONFIG_PATH = os.path.join(CONFIG_DIR, 'editor.xml')
 DEFAULT_CONFIG = {
     'last_world_file': 'atari_2600_world_1',
     'last_room': 0,
@@ -39,19 +40,44 @@ DEFAULT_CONFIG = {
 }
 
 def load_config():
-    """Carga la configuración del editor, usando valores por defecto si faltan."""
+    """Carga la configuración del editor desde XML, usando valores por defecto si faltan."""
+    import xml.etree.ElementTree as ET
     config = dict(DEFAULT_CONFIG)
     try:
-        with open(CONFIG_PATH) as f:
-            config.update(json.load(f))
-    except (FileNotFoundError, json.JSONDecodeError):
-        pass # Usa los valores por defecto
+        root = ET.parse(CONFIG_PATH).getroot()
+        for key, default in DEFAULT_CONFIG.items():
+            node = root.find(key)
+            if node is None or node.text is None:
+                continue
+            text = node.text.strip()
+            if isinstance(default, bool):
+                config[key] = text.lower() in ('true', '1', 'yes', 'on')
+            elif isinstance(default, int):
+                config[key] = int(text)
+            elif isinstance(default, float):
+                config[key] = float(text)
+            elif isinstance(default, list):
+                import json
+                config[key] = json.loads(text)
+            else:
+                config[key] = text
+    except (FileNotFoundError, ET.ParseError, ValueError):
+        pass
     return config
 
 def save_config(config):
-    """Guarda la configuración del editor en un archivo JSON."""
-    with open(CONFIG_PATH, 'w') as f:
-        json.dump(config, f, indent=2)
+    """Guarda la configuración del editor en XML."""
+    import xml.etree.ElementTree as ET
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    root = ET.Element('config')
+    for key, value in config.items():
+        node = ET.SubElement(root, key)
+        if isinstance(value, list):
+            import json
+            node.text = json.dumps(value)
+        else:
+            node.text = str(value)
+    ET.ElementTree(root).write(CONFIG_PATH, encoding='utf-8', xml_declaration=True)
 
 
 def world_path(filename):

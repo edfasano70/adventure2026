@@ -29,7 +29,7 @@ pip install pygame Pillow PyQt5
 python3 main.py
 
 # Editor de mundos
-python3 world_editor.py
+python3 editor.py
 ```
 
 Ambos programas deben ejecutarse desde la raíz del repositorio.
@@ -68,7 +68,7 @@ Ver [INSTRUCTIONS.md](INSTRUCTIONS.md) para instrucciones detalladas.
 
 ```
 ├── main.py                  # Juego completo (~1200 líneas)
-├── world_editor.py          # Editor PyQt5 (~800 líneas)
+├── editor.py          # Editor PyQt5 (~800 líneas)
 ├── core/
 │   ├── elements.py          # Definición y consulta de elementos
 │   └── elements.json        # Datos de todos los elementos + reglas

@@ -6,3 +6,6 @@ obsolete/
 
 # Recursos externos (texturas/imágenes de descarga) fuera del repo
 resources/
+
+# Configuración del usuario (se genera en runtime)
+config/

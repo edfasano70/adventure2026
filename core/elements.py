@@ -2,7 +2,7 @@
 """Carga y consulta la definición de los elementos del juego desde elements.json.
 
 Este módulo es la fuente única de datos sobre los elementos (tiles/items):
-tanto el juego (main.py) como el editor (world_editor.py) lo usan.
+tanto el juego (main.py) como el editor (editor.py) lo usan.
 La lectura del JSON no requiere pygame; las superficies se construyen después
 de pygame.init() con build_element_surfaces() y build_animations().
 """

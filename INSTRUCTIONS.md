@@ -1,6 +1,6 @@
 # Instrucciones — Adventure 2024
 
-Homenaje al Atari 2600. El juego está en `main.py` (requiere pygame 2.6 + Pillow) y el editor de mundos en `world_editor.py` (requiere PyQt5).
+Homenaje al Atari 2600. El juego está en `main.py` (requiere pygame 2.6 + Pillow) y el editor de mundos en `editor.py` (requiere PyQt5).
 
 ---
 
@@ -89,7 +89,7 @@ Encontrar el **trofeo** y llevarlo al **altar** (objeto 4×4 sólido). Al tocar 
 
 ## El editor
 
-Se ejecuta con `python3 world_editor.py`. Es PyQt5, no pygame.
+Se ejecuta con `python3 editor.py`. Es PyQt5, no pygame.
 
 ### Controles del teclado
 
@@ -155,4 +155,4 @@ Al guardar: persiste en `core/elements.json` con la bandera `custom: true` y rec
 - **Nueva Sala (N)**: añade una sala vacía.
 - **Eliminar Sala**: elimina la sala actual y arregla conexiones que la referencian.
 - **Nuevo Mundo**: crea un mundo nuevo con una sala vacía (genera nombre único automáticamente).
-- El estado se persiste en `editor_settings.json`: última sala, pincel, directorio de imágenes, geometría de ventana.
+- El estado se persiste en `config/adventure2/editor.xml`: última sala, pincel, directorio de imágenes, geometría de ventana.
