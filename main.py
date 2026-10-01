@@ -209,6 +209,28 @@ def load_spritesheet_frames(path, frame_width, frame_height, scale=2):
     return frames
 
 
+def load_hero_frameset(suffix=''):
+    """Carga los spritesheets del héroe (walking) y devuelve la lista plana.
+
+    El sufijo permite cargar la variante con espada (p. ej. '_sword').
+    Orden plano: right(4) + left(4) + up(4) + down(4), coherente con HERO_ANIMATIONS.
+    """
+    frames = {
+        'right': load_spritesheet_frames(f'assets/images/hero_walking_right{suffix}.png', 32, 64),
+        'left':  load_spritesheet_frames(f'assets/images/hero_walking_left{suffix}.png', 32, 64),
+        'up':    load_spritesheet_frames(f'assets/images/hero_walking_up{suffix}.png', 32, 64),
+        'down':  load_spritesheet_frames(f'assets/images/hero_walking_down{suffix}.png', 32, 64),
+    }
+    return frames['right'] + frames['left'] + frames['up'] + frames['down']
+
+
+def hero_image_set(player):
+    """Devuelve el frameset del héroe: con espada si lleva un arma de huida (espada) en el inventario."""
+    if FLEE_ITEMS & set(player.get('inventory', [])):
+        return player['images_sword']
+    return player['images']
+
+
 def build_map_surface(map_data, hero):
     """Crea una superficie pre-renderizada del mapa y una lista de rects de colisión."""
     map_surface = pygame.Surface((WIDTH, GAME_HEIGHT))
@@ -299,6 +321,8 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
         moved_by_keys = True
 
     # --- Animación basada en tiempo ---
+    # El frameset cambia si el héroe lleva la espada en el inventario
+    current_images = hero_image_set(player)
     if moved_by_keys: # Solo animar si se están presionando teclas de movimiento
         player['animation_timer'] += dt
         if player['animation_timer'] >= ANIMATION_INTERVAL:
@@ -308,10 +332,10 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
             player['frame_index'] = (player['frame_index'] + 1) % anim_info['num_frames']
             # Calcula el índice global en la lista de imágenes
             image_index = anim_info['start_frame'] + player['frame_index']
-            player['image'] = player['images'][image_index]
+            player['image'] = current_images[image_index]
     else: # Si no se mueve, resetea al primer frame de la dirección actual
         player['frame_index'] = 0
-        player['image'] = player['images'][HERO_ANIMATIONS[player['direction']]['start_frame']]
+        player['image'] = current_images[HERO_ANIMATIONS[player['direction']]['start_frame']]
 
     # Guarda la posición original para posibles rebotes
     original_player_x = player['rect'].x
@@ -800,20 +824,14 @@ def draw_visibility_fog(screen, hero, visibility_radius):
     screen.blit(fog_surface, (0, TOP_BAR_HEIGHT))
 
 # --- Carga de imágenes del héroe desde spritesheets PNG (4 frames de 32x64, escalados x2) ---
-hero_frames = {
-    'right': load_spritesheet_frames('assets/images/hero_walking_right.png', 32, 64),
-    'left':  load_spritesheet_frames('assets/images/hero_walking_left.png', 32, 64),
-    'up':    load_spritesheet_frames('assets/images/hero_walking_up.png', 32, 64),
-    'down':  load_spritesheet_frames('assets/images/hero_walking_down.png', 32, 64),
-}
-# Orden plano: right(4) + left(4) + up(4) + down(4), coherente con HERO_ANIMATIONS
-hero_images = (hero_frames['right'] + hero_frames['left']
-               + hero_frames['up'] + hero_frames['down'])
+hero_images = load_hero_frameset()          # variante normal
+hero_images_sword = load_hero_frameset('_sword')  # variante con espada en mano
 hero_death_image = pygame.image.load('assets/images/hero_death.png').convert_alpha()
 
 hero = {
     "rect": pygame.Rect(0, 0, HERO_WIDTH, HERO_HEIGHT),
     "images": hero_images,
+    "images_sword": hero_images_sword,
     "direction": 'right', # Dirección actual: 'right', 'left', 'up', 'down'
     "frame_index": 0, # Frame actual de la animación
     "animation_timer": 0, # Temporizador para la animación
