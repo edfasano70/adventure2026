@@ -94,10 +94,10 @@ STEP_SOUND_INTERVAL = 180 # Milisegundos entre cada sonido de paso
 
 # Estructura para la animación del héroe
 HERO_ANIMATIONS = {
-    'right': {'start_frame': 0, 'num_frames': 4},
-    'left':  {'start_frame': 4, 'num_frames': 4},
-    'up':    {'start_frame': 8, 'num_frames': 2},
-    'down':  {'start_frame': 10, 'num_frames': 2}
+    'right': {'start_frame': 0,  'num_frames': 4},
+    'left':  {'start_frame': 4,  'num_frames': 4},
+    'up':    {'start_frame': 8,  'num_frames': 4},
+    'down':  {'start_frame': 12, 'num_frames': 4}
 }
 
 # --- Constantes para la animación del dragón ---
@@ -186,6 +186,28 @@ def load_gif_frames(path):
     except EOFError:
         pass # Fin de los frames
     return frames
+
+
+def load_spritesheet_frames(path, frame_width, frame_height, scale=2):
+    """Corta un spritesheet horizontal en frames y los escala (nearest-neighbor).
+
+    Devuelve una lista de superficies de (frame_width*scale, frame_height*scale).
+    """
+    try:
+        sheet = pygame.image.load(path).convert_alpha()
+    except FileNotFoundError:
+        print(f"Error: No se encontró el spritesheet en '{path}'")
+        return []
+    frames = []
+    count = sheet.get_width() // frame_width
+    for i in range(count):
+        rect = pygame.Rect(i * frame_width, 0, frame_width, frame_height)
+        frame = sheet.subsurface(rect)
+        if scale != 1:
+            frame = pygame.transform.scale(frame, (frame_width * scale, frame_height * scale))
+        frames.append(frame)
+    return frames
+
 
 def build_map_surface(map_data, hero):
     """Crea una superficie pre-renderizada del mapa y una lista de rects de colisión."""
@@ -777,12 +799,16 @@ def draw_visibility_fog(screen, hero, visibility_radius):
     # Dibuja la superficie de la niebla sobre el área de juego
     screen.blit(fog_surface, (0, TOP_BAR_HEIGHT))
 
-# --- Carga de imágenes del héroe desde GIFs ---
-hero_images = []
-hero_images.extend(load_gif_frames('assets/images/hero_r.gif')) # 4 frames
-hero_images.extend(load_gif_frames('assets/images/hero_l.gif')) # 4 frames
-hero_images.extend(load_gif_frames('assets/images/hero_u.gif')) # 2 frames
-hero_images.extend(load_gif_frames('assets/images/hero_d.gif')) # 2 frames
+# --- Carga de imágenes del héroe desde spritesheets PNG (4 frames de 32x64, escalados x2) ---
+hero_frames = {
+    'right': load_spritesheet_frames('assets/images/hero_walking_right.png', 32, 64),
+    'left':  load_spritesheet_frames('assets/images/hero_walking_left.png', 32, 64),
+    'up':    load_spritesheet_frames('assets/images/hero_walking_up.png', 32, 64),
+    'down':  load_spritesheet_frames('assets/images/hero_walking_down.png', 32, 64),
+}
+# Orden plano: right(4) + left(4) + up(4) + down(4), coherente con HERO_ANIMATIONS
+hero_images = (hero_frames['right'] + hero_frames['left']
+               + hero_frames['up'] + hero_frames['down'])
 hero_death_image = pygame.image.load('assets/images/hero_death.png').convert_alpha()
 
 hero = {
