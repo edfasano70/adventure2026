@@ -1,4 +1,4 @@
-# Adventure 2024
+# Adventure 2026
 
 Homenaje pygame al Atari 2600 — juego de exploración, laberintos y dragones.
 
@@ -8,8 +8,8 @@ Homenaje pygame al Atari 2600 — juego de exploración, laberintos y dragones.
 
 | | | |
 |:---:|:---:|:---:|
-| ![Sala con castillo](assets/screenshots/screenshot_01.png) | ![Altar y trofeo](assets/screenshots/screenshot_02.png) | ![Héroe vs dragón](assets/screenshots/screenshot_03.png) |
-| ![Laberinto](assets/screenshots/screenshot_04.png) | ![Entrada al castillo](assets/screenshots/screenshot_05.png) | ![Niebla de guerra](assets/screenshots/screenshot_06.png) |
+| ![Sala del castillo](assets/screenshots/screenshot_01.png) | ![Altar y espada](assets/screenshots/screenshot_02.png) | ![Laberinto de piedra](assets/screenshots/screenshot_03.png) |
+| ![Pasarelas sobre el agua](assets/screenshots/screenshot_04.png) | ![Trofeo entre la niebla](assets/screenshots/screenshot_05.png) | |
 
 ## Requisitos
 
@@ -68,7 +68,7 @@ Ver [INSTRUCTIONS.md](INSTRUCTIONS.md) para instrucciones detalladas.
 
 ```
 ├── main.py                  # Juego completo (~1200 líneas)
-├── editor.py          # Editor PyQt5 (~800 líneas)
+├── editor.py                # Editor PyQt5 (~800 líneas)
 ├── core/
 │   ├── elements.py          # Definición y consulta de elementos
 │   └── elements.json        # Datos de todos los elementos + reglas
