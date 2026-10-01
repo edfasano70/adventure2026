@@ -1,4 +1,4 @@
-# Instrucciones — Adventure 2024
+# Instrucciones — Adventure 2026
 
 Homenaje al Atari 2600. El juego está en `main.py` (requiere pygame 2.6 + Pillow) y el editor de mundos en `editor.py` (requiere PyQt5).
 
