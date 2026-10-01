@@ -852,11 +852,12 @@ map_surface, collision_rects, item_rects, door_rects, animated_rects = build_map
 opening_doors = []
 
 # --- Inicialización del dragón (usando un diccionario) ---
-dragon_images_r = load_gif_frames('assets/images/dragon_r.gif')
-dragon_images_l = load_gif_frames('assets/images/dragon_l.gif')
+# Spritesheets de 2 frames (64x128) escalados x2 -> 128x256 por frame
+dragon_images_r = load_spritesheet_frames('assets/images/dragon_right.png', 64, 128)
+dragon_images_l = load_spritesheet_frames('assets/images/dragon_left.png', 64, 128)
 if not dragon_images_r or not dragon_images_l:
     print("Error: No se pudieron cargar las animaciones del dragón. Usando fallback.")
-    fallback = pygame.Surface((CELL, CELL))
+    fallback = pygame.Surface((128, 256), pygame.SRCALPHA)
     fallback.fill('red')
     dragon_images_r = dragon_images_r or [fallback]
     dragon_images_l = dragon_images_l or [fallback]
