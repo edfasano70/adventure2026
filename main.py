@@ -131,16 +131,46 @@ def toggle_fullscreen():
     save_config(config) # Recuerda la configuración para la próxima vez
     flags = pygame.FULLSCREEN if is_fullscreen else 0
     gameScreen = pygame.display.set_mode((WIDTH, SCREEN_HEIGHT), flags)
+
+def capture_screenshot():
+    """Guarda la pantalla actual en assets/screenshots/ con numeración creciente (tecla F12)."""
+    carpeta = os.path.join('assets', 'screenshots')
+    os.makedirs(carpeta, exist_ok=True)
+    # Busca el siguiente índice libre: screenshot_00.png, screenshot_01.png, ...
+    siguiente = 0
+    for nombre in os.listdir(carpeta):
+        if nombre.startswith('screenshot_') and nombre.endswith('.png'):
+            try:
+                numero = int(nombre[len('screenshot_'):-len('.png')])
+                siguiente = max(siguiente, numero + 1)
+            except ValueError:
+                pass
+    ruta = os.path.join(carpeta, f'screenshot_{siguiente:02d}.png')
+    pygame.image.save(gameScreen, ruta)
+    return ruta
 # --- Pantalla de inicio ---
 landing_image = pygame.image.load('assets/images/adventure_intro2.png').convert_alpha()
 landing_rect = landing_image.get_rect(center=gameScreen.get_rect().center)
 gameScreen.blit(landing_image, landing_rect)
 pygame.display.flip()
-pygame.time.wait(2000)
+# Muestra la portada durante 2 s; durante ese tiempo F12 también captura la pantalla
+intro_finish = pygame.time.get_ticks() + 2000
+while pygame.time.get_ticks() < intro_finish:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_F12:
+            capture_screenshot()
+    pygame.time.wait(20)
 
 # --- Inicialización del temporizador y la fuente ---
 start_time = pygame.time.get_ticks()
 font = pygame.font.Font(None, 50) # Fuente para los contadores
+notice_font = pygame.font.Font(None, 40) # Fuente para avisos en pantalla (p.ej. captura guardada)
+# Aviso temporal mostrado al guardar una captura con F12
+screenshot_notice_text = ''
+screenshot_notice_until = 0
 
 # --- Carga de Sonidos ---
 # (Asegúrate de tener un archivo de sonido para la derrota del dragón)
@@ -1050,6 +1080,11 @@ while not gameOver:
             if event.key == pygame.K_ESCAPE:
                 if show_pause_menu(gameScreen):
                     gameOver = True
+            if event.key == pygame.K_F12:
+                # Guarda una captura de la pantalla en assets/screenshots/
+                ruta_captura = capture_screenshot()
+                screenshot_notice_text = f'Captura guardada: {os.path.basename(ruta_captura)}'
+                screenshot_notice_until = pygame.time.get_ticks() + 1500
 
     # --- Actualización de estado ---
     # Mientras dure la animación de las puertas, el héroe permanece inmóvil
@@ -1279,6 +1314,18 @@ while not gameOver:
     dragon_count_text = font.render(f"x {hero['dragons_killed']}", True, 'white')
     gameScreen.blit(dragon_icon_image, (WIDTH - 130, (TOP_BAR_HEIGHT - dragon_icon_image.get_height()) // 2))
     gameScreen.blit(dragon_count_text, (WIDTH - 60, (TOP_BAR_HEIGHT - dragon_count_text.get_height()) // 2))
+
+    # --- Aviso temporal al guardar una captura (F12) ---
+    if screenshot_notice_text:
+        if pygame.time.get_ticks() < screenshot_notice_until:
+            aviso = notice_font.render(screenshot_notice_text, True, 'yellow')
+            fondo = pygame.Surface((aviso.get_width() + 20, aviso.get_height() + 10), pygame.SRCALPHA)
+            fondo.fill((0, 0, 0, 180))
+            aviso_rect = fondo.get_rect(center=(WIDTH // 2, TOP_BAR_HEIGHT + GAME_HEIGHT // 2))
+            gameScreen.blit(fondo, aviso_rect)
+            gameScreen.blit(aviso, aviso.get_rect(center=aviso_rect.center))
+        else:
+            screenshot_notice_text = ''
 
     pygame.display.flip()
 

@@ -11,6 +11,8 @@ Homenaje pygame al Atari 2600 — juego de exploración, laberintos y dragones.
 | ![Sala del castillo](assets/screenshots/screenshot_01.png) | ![Altar y espada](assets/screenshots/screenshot_02.png) | ![Laberinto de piedra](assets/screenshots/screenshot_03.png) |
 | ![Pasarelas sobre el agua](assets/screenshots/screenshot_04.png) | ![Trofeo entre la niebla](assets/screenshots/screenshot_05.png) | |
 
+> Las capturas se regeneran pulsando `F12` en el orden mostrado (portada, sala 1, 2, 3, 4 y 5); la tecla numera los archivos automáticamente.
+
 ## Requisitos
 
 - Python 3.10+
@@ -42,6 +44,7 @@ Ambos programas deben ejecutarse desde la raíz del repositorio.
 | `F11` | Pantalla completa / ventana |
 | `F1` | Cargar mundo |
 | `F2` | Reinicio instantáneo |
+| `F12` | Guardar captura en `assets/screenshots/` |
 | `ESC` | Menú de pausa |
 
 ## Objetivo
