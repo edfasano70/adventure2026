@@ -91,6 +91,7 @@ BOUNCE_BACK_AMOUNT = 10 # Pixeles para rebotar hacia atrás en caso de colisión
 # --- Constantes para la animación del héroe ---
 ANIMATION_INTERVAL = 100 # Milisegundos entre cada frame de animación
 STEP_SOUND_INTERVAL = 180 # Milisegundos entre cada sonido de paso
+HERO_DAMAGE_MS = 600 # Milisegundos que dura la animación de daño tras un golpe del dragón
 
 # Estructura para la animación del héroe
 HERO_ANIMATIONS = {
@@ -351,21 +352,30 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
         moved_by_keys = True
 
     # --- Animación basada en tiempo ---
-    # El frameset cambia si el héroe lleva la espada en el inventario
-    current_images = hero_image_set(player)
-    if moved_by_keys: # Solo animar si se están presionando teclas de movimiento
-        player['animation_timer'] += dt
-        if player['animation_timer'] >= ANIMATION_INTERVAL:
-            player['animation_timer'] = 0
-            anim_info = HERO_ANIMATIONS[player['direction']]
-            # Avanza el frame dentro del ciclo de la animación actual
-            player['frame_index'] = (player['frame_index'] + 1) % anim_info['num_frames']
-            # Calcula el índice global en la lista de imágenes
-            image_index = anim_info['start_frame'] + player['frame_index']
-            player['image'] = current_images[image_index]
-    else: # Si no se mueve, resetea al primer frame de la dirección actual
-        player['frame_index'] = 0
-        player['image'] = current_images[HERO_ANIMATIONS[player['direction']]['start_frame']]
+    now = pygame.time.get_ticks()
+    if now < player.get('damage_until', 0):
+        # El héroe acaba de recibir un golpe: reproduce la animación de daño
+        player['damage_timer'] += dt
+        if player['damage_timer'] >= ANIMATION_INTERVAL:
+            player['damage_timer'] -= ANIMATION_INTERVAL
+            player['damage_frame_index'] = (player['damage_frame_index'] + 1) % len(player['images_damage'])
+        player['image'] = player['images_damage'][player['damage_frame_index']]
+    else:
+        # El frameset cambia si el héroe lleva la espada en el inventario
+        current_images = hero_image_set(player)
+        if moved_by_keys: # Solo animar si se están presionando teclas de movimiento
+            player['animation_timer'] += dt
+            if player['animation_timer'] >= ANIMATION_INTERVAL:
+                player['animation_timer'] = 0
+                anim_info = HERO_ANIMATIONS[player['direction']]
+                # Avanza el frame dentro del ciclo de la animación actual
+                player['frame_index'] = (player['frame_index'] + 1) % anim_info['num_frames']
+                # Calcula el índice global en la lista de imágenes
+                image_index = anim_info['start_frame'] + player['frame_index']
+                player['image'] = current_images[image_index]
+        else: # Si no se mueve, resetea al primer frame de la dirección actual
+            player['frame_index'] = 0
+            player['image'] = current_images[HERO_ANIMATIONS[player['direction']]['start_frame']]
 
     # Guarda la posición original para posibles rebotes
     original_player_x = player['rect'].x
@@ -635,6 +645,9 @@ def _initialize_game_state(hero, dragon):
     hero["dragons_killed"] = 0
     hero["health"] = START_HEALTH
     hero["last_damage_time"] = 0
+    hero["damage_until"] = 0
+    hero["damage_timer"] = 0
+    hero["damage_frame_index"] = 0
     hero["image"] = hero['images'][0]
 
     dragon["speed"] = 4.0
@@ -856,12 +869,14 @@ def draw_visibility_fog(screen, hero, visibility_radius):
 # --- Carga de imágenes del héroe desde spritesheets PNG (4 frames de 32x64, escalados x2) ---
 hero_images = load_hero_frameset()          # variante normal
 hero_images_sword = load_hero_frameset('_sword')  # variante con espada en mano
+hero_damage_frames = load_spritesheet_frames('assets/images/hero_damage.png', 32, 64) # variante de daño
 hero_death_image = pygame.image.load('assets/images/hero_death.png').convert_alpha()
 
 hero = {
     "rect": pygame.Rect(0, 0, HERO_WIDTH, HERO_HEIGHT),
     "images": hero_images,
     "images_sword": hero_images_sword,
+    "images_damage": hero_damage_frames,
     "direction": 'right', # Dirección actual: 'right', 'left', 'up', 'down'
     "frame_index": 0, # Frame actual de la animación
     "animation_timer": 0, # Temporizador para la animación
@@ -870,7 +885,10 @@ hero = {
     "inventory": [], # El inventario ahora es una lista
     "dragons_killed": 0, # Contador de dragones derrotados
     "health": START_HEALTH, # Energía del héroe (4 tramos)
-    "last_damage_time": 0 # Momento (ms) del último golpe del dragón para el enfriamiento de daño
+    "last_damage_time": 0, # Momento (ms) del último golpe del dragón para el enfriamiento de daño
+    "damage_until": 0, # Instante (ms) hasta el que se muestra la animación de daño
+    "damage_timer": 0, # Temporizador de la animación de daño
+    "damage_frame_index": 0 # Frame actual de la animación de daño
 }
 hero["rect"].center = (WIDTH / 2, TOP_BAR_HEIGHT + GAME_HEIGHT - CELL * 2.5)
 
@@ -1142,6 +1160,10 @@ while not gameOver:
                     sfx_dragon_attack.play()
                     hero['health'] -= 1
                     hero['last_damage_time'] = now
+                    # Reproduce la animación de daño del héroe
+                    hero['damage_until'] = now + HERO_DAMAGE_MS
+                    hero['damage_timer'] = 0
+                    hero['damage_frame_index'] = 0
 
                     # Rebote: héroe y dragón se separan en direcciones opuestas
                     dx = dragon['x'] - hero['rect'].centerx
