@@ -871,6 +871,8 @@ hero_images = load_hero_frameset()          # variante normal
 hero_images_sword = load_hero_frameset('_sword')  # variante con espada en mano
 hero_damage_frames = load_spritesheet_frames('assets/images/hero_damage.png', 32, 64) # variante de daño
 hero_death_image = pygame.image.load('assets/images/hero_death.png').convert_alpha()
+# El sprite de muerte viene a resolución 1:1; se escala x2 como el resto de sprites del héroe
+hero_death_image = pygame.transform.scale(hero_death_image, (hero_death_image.get_width() * 2, hero_death_image.get_height() * 2))
 
 hero = {
     "rect": pygame.Rect(0, 0, HERO_WIDTH, HERO_HEIGHT),
