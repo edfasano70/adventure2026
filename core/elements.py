@@ -9,6 +9,8 @@ de pygame.init() con build_element_surfaces() y build_animations().
 import json
 import os
 
+import media  # carga de imágenes (incluye rasterizado de SVG)
+
 # El JSON vive junto a este módulo (core/), no en el cwd
 ELEMENTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'elements.json')
 
@@ -124,16 +126,14 @@ def build_element_surfaces():
       - tile_images: char -> superficie de TODOS los elementos (para hornear el mapa).
       - item_images: inventory_id -> superficie de los items (llaves, espada, trofeo, altar).
     """
-    import pygame
     tile_images = {}
     item_images = {}
     for ch, data in ELEMENTS.items():
         full = _resolve_image_path(data.get('image', ''))
         if full is None:
             continue
-        try:
-            surf = pygame.image.load(full).convert_alpha()
-        except Exception:
+        surf = media.load_surface(full)
+        if surf is None:
             continue
         tile_images[ch] = surf
         kid = data.get('inventory_id')
@@ -157,9 +157,8 @@ def build_animations():
         full = _resolve_image_path(data.get('image', ''))
         if full is None:
             continue
-        try:
-            base = pygame.image.load(full).convert_alpha()
-        except Exception:
+        base = media.load_surface(full)
+        if base is None:
             continue
         if anim.get('type') == 'rotate':
             interval = max(1, int(anim.get('interval_ms', 250)))

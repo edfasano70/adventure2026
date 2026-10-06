@@ -20,9 +20,10 @@ Homenaje pygame al Atari 2600 — juego de exploración, laberintos y dragones.
 - [pygame](https://www.pygame.org/) 2.6+
 - [Pillow](https://python-pillow.org/)
 - [PyQt5](https://www.riverbankcomputing.com/software/pyqt/) (solo para el editor)
+- [svglib](https://github.com/deeplook/svglib) + [reportlab](https://www.reportlab.com/) (solo para imágenes SVG)
 
 ```bash
-pip install pygame Pillow PyQt5
+pip install pygame Pillow PyQt5 svglib reportlab
 ```
 
 ## Ejecución
@@ -75,6 +76,7 @@ Ver [INSTRUCTIONS.md](INSTRUCTIONS.md) para instrucciones detalladas.
 ├── editor.py                # Editor PyQt5 (~800 líneas)
 ├── core/
 │   ├── elements.py          # Definición y consulta de elementos
+│   ├── media.py             # Carga de imágenes (PNG/GIF/SVG)
 │   └── elements.json        # Datos de todos los elementos + reglas
 ├── worlds/
 │   └── atari_2600_world_1.py  # Mundo por defecto (14 salas)
@@ -114,6 +116,8 @@ maps.append([[up, right, down, left], [grid_rows...], dragon, visibility])
 | `A` | Altar (4×4) | Sí |
 
 Se pueden crear elementos personalizados desde el editor.
+
+Las imágenes de los elementos y del héroe pueden ser **PNG, GIF o SVG**; los SVG se rasterizan con transparencia al cargar (requiere `svglib` + `reportlab`).
 
 ## Licencia
 

@@ -278,7 +278,7 @@ class ElementDialog(QDialog):
             return
 
         if not self.image_edit.text().strip():
-            QMessageBox.warning(self, 'Imagen', 'Indica el nombre del archivo de imagen (p.ej. mi_tile.png).')
+            QMessageBox.warning(self, 'Imagen', 'Indica el nombre del archivo de imagen (p.ej. mi_tile.png o mi_tile.svg).')
             return
 
         super().accept()
@@ -289,7 +289,7 @@ class ElementDialog(QDialog):
             self,
             'Seleccionar Imagen',
             self.last_image_dir,
-            'Imágenes (*.png *.gif)'
+            'Imágenes (*.png *.gif *.svg)'
         )
         if filename:
             self.parent().config['last_image_dir'] = os.path.dirname(filename)

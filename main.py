@@ -14,6 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'core')
 pygame.init()
 # --- Carga de la definición de elementos desde core/elements.json ---
 import elements
+import media  # carga de imágenes (incluye rasterizado de SVG)
 ELEMENTS = elements.ELEMENTS
 GAME_RULES = elements.GAME_RULES
 # Constantes derivadas de las reglas del JSON
@@ -222,11 +223,11 @@ def load_gif_frames(path):
 def load_spritesheet_frames(path, frame_width, frame_height, scale=2):
     """Corta un spritesheet horizontal en frames y los escala (nearest-neighbor).
 
+    Acepta PNG/GIF (pygame) o SVG (rasterizado con media.load_surface).
     Devuelve una lista de superficies de (frame_width*scale, frame_height*scale).
     """
-    try:
-        sheet = pygame.image.load(path).convert_alpha()
-    except FileNotFoundError:
+    sheet = media.load_surface(path)
+    if sheet is None:
         print(f"Error: No se encontró el spritesheet en '{path}'")
         return []
     frames = []
@@ -240,6 +241,22 @@ def load_spritesheet_frames(path, frame_width, frame_height, scale=2):
     return frames
 
 
+# Spritesheet SVG de prueba del héroe: 4 frames de 68x64, en test/.
+# Si existe test/hero_<direccion>.svg se usa en lugar del PNG equivalente.
+HERO_SVG_DIR = 'test'
+HERO_SVG_FRAME = (68, 64)   # ancho, alto de cada frame del SVG
+HERO_PNG_FRAME = (32, 64)   # ancho, alto de cada frame del PNG
+
+
+def _load_hero_direction(direction, suffix):
+    """Carga el spritesheet de una dirección: SVG de prueba si existe, si no PNG."""
+    svg_path = os.path.join(HERO_SVG_DIR, f'hero_{direction}{suffix}.svg')
+    if os.path.exists(svg_path):
+        return load_spritesheet_frames(svg_path, HERO_SVG_FRAME[0], HERO_SVG_FRAME[1])
+    png_path = f'assets/images/hero_walking_{direction}{suffix}.png'
+    return load_spritesheet_frames(png_path, HERO_PNG_FRAME[0], HERO_PNG_FRAME[1])
+
+
 def load_hero_frameset(suffix=''):
     """Carga los spritesheets del héroe (walking) y devuelve la lista plana.
 
@@ -247,10 +264,10 @@ def load_hero_frameset(suffix=''):
     Orden plano: right(4) + left(4) + up(4) + down(4), coherente con HERO_ANIMATIONS.
     """
     frames = {
-        'right': load_spritesheet_frames(f'assets/images/hero_walking_right{suffix}.png', 32, 64),
-        'left':  load_spritesheet_frames(f'assets/images/hero_walking_left{suffix}.png', 32, 64),
-        'up':    load_spritesheet_frames(f'assets/images/hero_walking_up{suffix}.png', 32, 64),
-        'down':  load_spritesheet_frames(f'assets/images/hero_walking_down{suffix}.png', 32, 64),
+        'right': _load_hero_direction('right', suffix),
+        'left':  _load_hero_direction('left', suffix),
+        'up':    _load_hero_direction('up', suffix),
+        'down':  _load_hero_direction('down', suffix),
     }
     return frames['right'] + frames['left'] + frames['up'] + frames['down']
 
@@ -577,7 +594,7 @@ def play_dragon_death_sequence(screen, dragon, hero, map_surface, animated_rects
             img = item_images.get(item['type'])
             if img:
                 screen.blit(img, item['rect'])
-        screen.blit(hero['image'], hero['rect'])
+        screen.blit(hero['image'], (hero['rect'].centerx - hero['image'].get_width() // 2, hero['rect'].y))
         door_img_copy = tile_images['D'].copy()
         for door in opening_doors:
             direction = -1 if door['rect'].centerx < WIDTH // 2 else 1
@@ -1280,7 +1297,7 @@ while not gameOver:
         img = item_images.get(item['type'])
         if img:
             gameScreen.blit(img, item['rect'])
-    gameScreen.blit(hero['image'], hero['rect'])
+    gameScreen.blit(hero['image'], (hero['rect'].centerx - hero['image'].get_width() // 2, hero['rect'].y))
 
     # --- Dibuja y actualiza la animación de las puertas que se deslizan hacia los lados ---
     door_img_copy = tile_images['D'].copy() # Usa una copia para no modificar la original
