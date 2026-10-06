@@ -241,18 +241,19 @@ def load_spritesheet_frames(path, frame_width, frame_height, scale=2):
     return frames
 
 
-# Spritesheet SVG de prueba del héroe: 4 frames de 68x64, en test/.
+# Spritesheet SVG de prueba del héroe: 4 frames de 136x128, en test/.
 # Si existe test/hero_<direccion>.svg se usa en lugar del PNG equivalente.
 HERO_SVG_DIR = 'test'
-HERO_SVG_FRAME = (68, 64)   # ancho, alto de cada frame del SVG
-HERO_PNG_FRAME = (32, 64)   # ancho, alto de cada frame del PNG
+HERO_SVG_FRAME = (136, 128)   # ancho, alto de cada frame del SVG (ya a escala final)
+HERO_PNG_FRAME = (32, 64)     # ancho, alto de cada frame del PNG
 
 
 def _load_hero_direction(direction, suffix):
     """Carga el spritesheet de una dirección: SVG de prueba si existe, si no PNG."""
     svg_path = os.path.join(HERO_SVG_DIR, f'hero_{direction}{suffix}.svg')
     if os.path.exists(svg_path):
-        return load_spritesheet_frames(svg_path, HERO_SVG_FRAME[0], HERO_SVG_FRAME[1])
+        # El SVG ya viene a la resolución final: no hay que reescalar.
+        return load_spritesheet_frames(svg_path, HERO_SVG_FRAME[0], HERO_SVG_FRAME[1], scale=1)
     png_path = f'assets/images/hero_walking_{direction}{suffix}.png'
     return load_spritesheet_frames(png_path, HERO_PNG_FRAME[0], HERO_PNG_FRAME[1])
 
