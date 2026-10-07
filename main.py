@@ -90,9 +90,12 @@ PLAYER_SPEED = 10
 BOUNCE_BACK_AMOUNT = 10 # Pixeles para rebotar hacia atrás en caso de colisión
 
 # --- Constantes para la animación del héroe ---
-ANIMATION_INTERVAL = 100 # Milisegundos entre cada frame de animación
+ANIMATION_INTERVAL = 100 # Milisegundos entre cada frame de la animación de daño
 STEP_SOUND_INTERVAL = 180 # Milisegundos entre cada sonido de paso
 HERO_DAMAGE_MS = 600 # Milisegundos que dura la animación de daño tras un golpe del dragón
+HERO_ANIMATION_CYCLE_MS = 400 # Duración (ms) de un ciclo completo de caminata del héroe
+# El intervalo por frame se deriva del nº de frames (cycle / num_frames), de modo que
+# un spritesheet de 8 frames se anima al mismo ritmo que uno de 4.
 
 # Orden de las direcciones del héroe en el frameset plano
 HERO_DIRECTIONS = ('right', 'left', 'up', 'down')
@@ -409,9 +412,11 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
         current_animations = hero_animation_set(player)
         if moved_by_keys: # Solo animar si se están presionando teclas de movimiento
             player['animation_timer'] += dt
-            if player['animation_timer'] >= ANIMATION_INTERVAL:
+            anim_info = current_animations[player['direction']]
+            # Intervalo por frame según el nº de frames, para mantener un ciclo constante
+            frame_interval = max(1, HERO_ANIMATION_CYCLE_MS // anim_info['num_frames'])
+            if player['animation_timer'] >= frame_interval:
                 player['animation_timer'] = 0
-                anim_info = current_animations[player['direction']]
                 # Avanza el frame dentro del ciclo de la animación actual
                 player['frame_index'] = (player['frame_index'] + 1) % anim_info['num_frames']
                 # Calcula el índice global en la lista de imágenes
