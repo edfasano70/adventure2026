@@ -96,6 +96,7 @@ HERO_DAMAGE_MS = 600 # Milisegundos que dura la animación de daño tras un golp
 HERO_ANIMATION_CYCLE_MS = 400 # Duración (ms) de un ciclo completo de caminata del héroe
 # El intervalo por frame se deriva del nº de frames (cycle / num_frames), de modo que
 # un spritesheet de 8 frames se anima al mismo ritmo que uno de 4.
+HERO_IDLE_CYCLE_MS = 800 # Duración (ms) de un ciclo completo de la animación de reposo
 
 # Orden de las direcciones del héroe en el frameset plano
 HERO_DIRECTIONS = ('right', 'left', 'up', 'down')
@@ -262,7 +263,20 @@ def load_spritesheet_frames_by_count(sheet, count, target_height):
 # Si existe resources/hero_walking_<direccion><sufijo>.svg se usa en lugar del PNG.
 HERO_SVG_DIR = 'resources'
 HERO_SVG_FRAMES = 8           # frames por spritesheet SVG
+HERO_IDLE_SVG = os.path.join(HERO_SVG_DIR, 'hero_idle.svg') # animación de reposo (vista frontal)
+HERO_IDLE_FRAMES = 4          # frames del spritesheet de reposo
 HERO_PNG_FRAME = (32, 64)     # ancho, alto de cada frame del PNG
+
+
+def load_idle_frames():
+    """Carga la animación de reposo del héroe (resources/hero_idle.svg).
+
+    Devuelve una lista vacía si no existe el archivo.
+    """
+    if not os.path.exists(HERO_IDLE_SVG):
+        return []
+    sheet = media.load_surface(HERO_IDLE_SVG)
+    return load_spritesheet_frames_by_count(sheet, HERO_IDLE_FRAMES, HERO_HEIGHT)
 
 
 def _load_hero_direction(direction, suffix):
@@ -422,9 +436,18 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
                 # Calcula el índice global en la lista de imágenes
                 image_index = anim_info['start_frame'] + player['frame_index']
                 player['image'] = current_images[image_index]
-        else: # Si no se mueve, resetea al primer frame de la dirección actual
+        else: # Parado: reproduce la animación de reposo si existe
             player['frame_index'] = 0
-            player['image'] = current_images[current_animations[player['direction']]['start_frame']]
+            idle_frames = player['images_idle']
+            if idle_frames:
+                player['idle_timer'] += dt
+                idle_interval = max(1, HERO_IDLE_CYCLE_MS // len(idle_frames))
+                if player['idle_timer'] >= idle_interval:
+                    player['idle_timer'] = 0
+                    player['idle_frame_index'] = (player['idle_frame_index'] + 1) % len(idle_frames)
+                player['image'] = idle_frames[player['idle_frame_index']]
+            else: # Sin idle: se queda en el primer frame de la dirección actual
+                player['image'] = current_images[current_animations[player['direction']]['start_frame']]
 
     # Guarda la posición original para posibles rebotes
     original_player_x = player['rect'].x
@@ -919,6 +942,7 @@ def draw_visibility_fog(screen, hero, visibility_radius):
 hero_images, hero_animations = load_hero_frameset()          # variante normal
 hero_images_sword, hero_animations_sword = load_hero_frameset('_sword')  # variante con espada en mano
 hero_damage_frames = load_spritesheet_frames('assets/images/hero_damage.png', 32, 64) # variante de daño
+hero_idle_frames = load_idle_frames() # animación de reposo (puede ser [])
 hero_death_image = pygame.image.load('assets/images/hero_death.png').convert_alpha()
 # El sprite de muerte viene a resolución 1:1; se escala x2 como el resto de sprites del héroe
 hero_death_image = pygame.transform.scale(hero_death_image, (hero_death_image.get_width() * 2, hero_death_image.get_height() * 2))
@@ -930,9 +954,12 @@ hero = {
     "animations": hero_animations,
     "animations_sword": hero_animations_sword,
     "images_damage": hero_damage_frames,
+    "images_idle": hero_idle_frames, # Animación de reposo (vista frontal)
     "direction": 'right', # Dirección actual: 'right', 'left', 'up', 'down'
     "frame_index": 0, # Frame actual de la animación
     "animation_timer": 0, # Temporizador para la animación
+    "idle_frame_index": 0, # Frame actual de la animación de reposo
+    "idle_timer": 0, # Temporizador de la animación de reposo
     "step_sound_timer": 0, # Temporizador para el sonido de los pasos
     "image": hero_images[0],
     "inventory": [], # El inventario ahora es una lista
