@@ -848,7 +848,7 @@ def show_pause_menu(screen):
 
         # La opción de pantalla completa muestra su estado actual
         fs_state = 'ON' if is_fullscreen else 'OFF'
-        options = [f"Pantalla Completa: {fs_state}", "Configuración", "Cargar Mundo", "Salir del Juego"]
+        options = [f"Pantalla Completa: {fs_state}", "Reiniciar partida", "Configuración", "Cargar Mundo", "Salir del Juego"]
 
         # Dibuja el título
         screen.blit(title_text, title_text.get_rect(center=(WIDTH / 2, HEIGHT / 2 - 100)))
@@ -871,7 +871,7 @@ def show_pause_menu(screen):
         click = None
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                return True  # Salir si se cierra la ventana
+                return 'quit'  # Salir si se cierra la ventana
             if event.type == pygame.MOUSEMOTION:
                 for i, rect in enumerate(option_rects):
                     if rect.collidepoint(event.pos):
@@ -895,18 +895,20 @@ def show_pause_menu(screen):
             if click == 0: # Pantalla Completa
                 toggle_fullscreen()
                 screen = gameScreen  # Seguir usando la nueva ventana
-            elif click == 1: # Configuración
+            elif click == 1: # Reiniciar partida
+                return 'reset'
+            elif click == 2: # Configuración
                 # Por ahora, esta opción no hace nada.
                 # En el futuro, aquí se podría llamar a una función show_settings_menu().
                 pass
-            elif click == 2: # Cargar Mundo
+            elif click == 3: # Cargar Mundo
                 result = show_world_select_menu(screen)
                 if result == 'quit':
-                    return True # Salir del juego
+                    return 'quit' # Salir del juego
                 elif result is True:
                     return False # Mundo cargado: volver al juego
-            elif click == 3: # Salir del Juego
-                return True
+            elif click == 4: # Salir del Juego
+                return 'quit'
 
         pygame.display.flip()
         gameClock.tick(15) # Limita los FPS en el menú para no consumir recursos innecesariamente
@@ -1176,8 +1178,13 @@ while not gameOver:
                 currentMap, map_surface, collision_rects, item_rects, door_rects, animated_rects, start_time = reset_game_state(hero, dragon, show_transition=False)
                 continue
             if event.key == pygame.K_ESCAPE:
-                if show_pause_menu(gameScreen):
+                result = show_pause_menu(gameScreen)
+                if result == 'quit':
                     gameOver = True
+                elif result == 'reset':
+                    # Reinicia la partida al instante desde el menú de pausa
+                    currentMap, map_surface, collision_rects, item_rects, door_rects, animated_rects, start_time = reset_game_state(hero, dragon, show_transition=False)
+                    continue
             if event.key == pygame.K_F12:
                 # Guarda una captura de la pantalla en assets/screenshots/
                 ruta_captura = capture_screenshot()
