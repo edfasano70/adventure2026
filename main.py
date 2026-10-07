@@ -94,13 +94,8 @@ ANIMATION_INTERVAL = 100 # Milisegundos entre cada frame de animación
 STEP_SOUND_INTERVAL = 180 # Milisegundos entre cada sonido de paso
 HERO_DAMAGE_MS = 600 # Milisegundos que dura la animación de daño tras un golpe del dragón
 
-# Estructura para la animación del héroe
-HERO_ANIMATIONS = {
-    'right': {'start_frame': 0,  'num_frames': 4},
-    'left':  {'start_frame': 4,  'num_frames': 4},
-    'up':    {'start_frame': 8,  'num_frames': 4},
-    'down':  {'start_frame': 12, 'num_frames': 4}
-}
+# Orden de las direcciones del héroe en el frameset plano
+HERO_DIRECTIONS = ('right', 'left', 'up', 'down')
 
 # --- Constantes para la animación del dragón ---
 DRAGON_ANIMATION_INTERVAL = 200 # Milisegundos entre cada frame de animación
@@ -241,36 +236,59 @@ def load_spritesheet_frames(path, frame_width, frame_height, scale=2):
     return frames
 
 
-# Spritesheet SVG de prueba del héroe: 4 frames de 136x128, en test/.
-# Si existe test/hero_<direccion>.svg se usa en lugar del PNG equivalente.
-HERO_SVG_DIR = 'test'
-HERO_SVG_FRAME = (136, 128)   # ancho, alto de cada frame del SVG (ya a escala final)
+def load_spritesheet_frames_by_count(sheet, count, target_height):
+    """Corta un spritesheet horizontal en `count` frames iguales y los escala a `target_height` de alto.
+
+    El ancho de cada frame se calcula conservando la proporción (smoothscale, con
+    antialias). Pensado para los SVG, que vienen a resolución arbitraria.
+    """
+    if sheet is None or count <= 0:
+        return []
+    frame_width = sheet.get_width() // count
+    frame_height = sheet.get_height()
+    target_width = max(1, round(frame_width * target_height / frame_height))
+    frames = []
+    for i in range(count):
+        rect = pygame.Rect(i * frame_width, 0, frame_width, frame_height)
+        frame = sheet.subsurface(rect)
+        frames.append(pygame.transform.smoothscale(frame, (target_width, target_height)))
+    return frames
+
+
+# Spritesheets SVG del héroe (prueba): 8 frames por dirección, en resources/.
+# Si existe resources/hero_walking_<direccion><sufijo>.svg se usa en lugar del PNG.
+HERO_SVG_DIR = 'resources'
+HERO_SVG_FRAMES = 8           # frames por spritesheet SVG
 HERO_PNG_FRAME = (32, 64)     # ancho, alto de cada frame del PNG
 
 
 def _load_hero_direction(direction, suffix):
-    """Carga el spritesheet de una dirección: SVG de prueba si existe, si no PNG."""
-    svg_path = os.path.join(HERO_SVG_DIR, f'hero_{direction}{suffix}.svg')
+    """Carga el spritesheet de una dirección: SVG si existe, si no PNG.
+
+    Los SVG se escalan a HERO_HEIGHT (128) de alto conservando la proporción.
+    """
+    svg_path = os.path.join(HERO_SVG_DIR, f'hero_walking_{direction}{suffix}.svg')
     if os.path.exists(svg_path):
-        # El SVG ya viene a la resolución final: no hay que reescalar.
-        return load_spritesheet_frames(svg_path, HERO_SVG_FRAME[0], HERO_SVG_FRAME[1], scale=1)
+        sheet = media.load_surface(svg_path)
+        return load_spritesheet_frames_by_count(sheet, HERO_SVG_FRAMES, HERO_HEIGHT)
     png_path = f'assets/images/hero_walking_{direction}{suffix}.png'
     return load_spritesheet_frames(png_path, HERO_PNG_FRAME[0], HERO_PNG_FRAME[1])
 
 
 def load_hero_frameset(suffix=''):
-    """Carga los spritesheets del héroe (walking) y devuelve la lista plana.
+    """Carga los spritesheets del héroe (walking).
 
-    El sufijo permite cargar la variante con espada (p. ej. '_sword').
-    Orden plano: right(4) + left(4) + up(4) + down(4), coherente con HERO_ANIMATIONS.
+    Devuelve ``(lista_plana, animaciones)``. La lista plana sigue el orden de
+    HERO_DIRECTIONS y ``animaciones`` mapea cada dirección a
+    ``{'start_frame', 'num_frames'}`` según los frames reales de su fuente (SVG u PNG).
     """
-    frames = {
-        'right': _load_hero_direction('right', suffix),
-        'left':  _load_hero_direction('left', suffix),
-        'up':    _load_hero_direction('up', suffix),
-        'down':  _load_hero_direction('down', suffix),
-    }
-    return frames['right'] + frames['left'] + frames['up'] + frames['down']
+    frames = {d: _load_hero_direction(d, suffix) for d in HERO_DIRECTIONS}
+    flat = []
+    animations = {}
+    for direction in HERO_DIRECTIONS:
+        animations[direction] = {'start_frame': len(flat), 'num_frames': len(frames[direction])}
+        flat.extend(frames[direction])
+    return flat, animations
 
 
 def hero_image_set(player):
@@ -278,6 +296,13 @@ def hero_image_set(player):
     if FLEE_ITEMS & set(player.get('inventory', [])):
         return player['images_sword']
     return player['images']
+
+
+def hero_animation_set(player):
+    """Devuelve la info de animación (start_frame/num_frames por dirección) del frameset en uso."""
+    if FLEE_ITEMS & set(player.get('inventory', [])):
+        return player['animations_sword']
+    return player['animations']
 
 
 def build_map_surface(map_data, hero):
@@ -381,11 +406,12 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
     else:
         # El frameset cambia si el héroe lleva la espada en el inventario
         current_images = hero_image_set(player)
+        current_animations = hero_animation_set(player)
         if moved_by_keys: # Solo animar si se están presionando teclas de movimiento
             player['animation_timer'] += dt
             if player['animation_timer'] >= ANIMATION_INTERVAL:
                 player['animation_timer'] = 0
-                anim_info = HERO_ANIMATIONS[player['direction']]
+                anim_info = current_animations[player['direction']]
                 # Avanza el frame dentro del ciclo de la animación actual
                 player['frame_index'] = (player['frame_index'] + 1) % anim_info['num_frames']
                 # Calcula el índice global en la lista de imágenes
@@ -393,7 +419,7 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
                 player['image'] = current_images[image_index]
         else: # Si no se mueve, resetea al primer frame de la dirección actual
             player['frame_index'] = 0
-            player['image'] = current_images[HERO_ANIMATIONS[player['direction']]['start_frame']]
+            player['image'] = current_images[current_animations[player['direction']]['start_frame']]
 
     # Guarda la posición original para posibles rebotes
     original_player_x = player['rect'].x
@@ -884,9 +910,9 @@ def draw_visibility_fog(screen, hero, visibility_radius):
     # Dibuja la superficie de la niebla sobre el área de juego
     screen.blit(fog_surface, (0, TOP_BAR_HEIGHT))
 
-# --- Carga de imágenes del héroe desde spritesheets PNG (4 frames de 32x64, escalados x2) ---
-hero_images = load_hero_frameset()          # variante normal
-hero_images_sword = load_hero_frameset('_sword')  # variante con espada en mano
+# --- Carga de imágenes del héroe (SVG en resources/ si existe, si no PNG) ---
+hero_images, hero_animations = load_hero_frameset()          # variante normal
+hero_images_sword, hero_animations_sword = load_hero_frameset('_sword')  # variante con espada en mano
 hero_damage_frames = load_spritesheet_frames('assets/images/hero_damage.png', 32, 64) # variante de daño
 hero_death_image = pygame.image.load('assets/images/hero_death.png').convert_alpha()
 # El sprite de muerte viene a resolución 1:1; se escala x2 como el resto de sprites del héroe
@@ -896,6 +922,8 @@ hero = {
     "rect": pygame.Rect(0, 0, HERO_WIDTH, HERO_HEIGHT),
     "images": hero_images,
     "images_sword": hero_images_sword,
+    "animations": hero_animations,
+    "animations_sword": hero_animations_sword,
     "images_damage": hero_damage_frames,
     "direction": 'right', # Dirección actual: 'right', 'left', 'up', 'down'
     "frame_index": 0, # Frame actual de la animación
