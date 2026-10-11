@@ -240,16 +240,24 @@ def load_spritesheet_frames(path, frame_width, frame_height, scale=2):
     return frames
 
 
-def load_spritesheet_frames_by_count(sheet, count, target_height):
-    """Corta un spritesheet horizontal en `count` frames iguales y los escala a `target_height` de alto.
+def load_spritesheet_frames_by_count(sheet, count, target_height, frame_width=None):
+    """Corta un spritesheet horizontal en `count` frames y los escala a `target_height` de alto.
 
-    El ancho de cada frame se calcula conservando la proporción (smoothscale, con
-    antialias). Pensado para los SVG, que vienen a resolución arbitraria.
+    Si `frame_width` se indica, se usa como ancho fijo de cada frame (rellenando con
+    transparencia a la derecha si el spritesheet queda corto); si es None, se deduce
+    repartiendo el ancho total entre `count`. Pensado para los SVG, que vienen a
+    resolución arbitraria. Usa smoothscale (con antialias).
     """
     if sheet is None or count <= 0:
         return []
-    frame_width = sheet.get_width() // count
     frame_height = sheet.get_height()
+    if frame_width is None:
+        frame_width = sheet.get_width() // count
+    needed = count * frame_width
+    if sheet.get_width() < needed:
+        padded = pygame.Surface((needed, frame_height), pygame.SRCALPHA)
+        padded.blit(sheet, (0, 0))
+        sheet = padded
     target_width = max(1, round(frame_width * target_height / frame_height))
     frames = []
     for i in range(count):
@@ -263,6 +271,7 @@ def load_spritesheet_frames_by_count(sheet, count, target_height):
 # Si existe resources/hero_walking_<direccion><sufijo>.svg se usa en lugar del PNG.
 HERO_SVG_DIR = 'resources'
 HERO_SVG_FRAMES = 8           # frames por spritesheet SVG
+HERO_SVG_SWORD_FRAME_WIDTH = 170 # ancho de cada frame en los SVG con espada (el arma es más ancha)
 HERO_IDLE_FRAMES = 4          # frames de los spritesheets de reposo (normal y con espada)
 HERO_PNG_FRAME = (32, 64)     # ancho, alto de cada frame del PNG
 
@@ -271,24 +280,28 @@ def load_idle_frames(filename='hero_idle.svg'):
     """Carga una animación de reposo del héroe desde resources/ (SVG).
 
     El ancho de cada frame se deduce del alto del spritesheet conservando la
-    proporción. Devuelve una lista vacía si no existe el archivo.
+    proporción (salvo los de espada, que usan HERO_SVG_SWORD_FRAME_WIDTH).
+    Devuelve una lista vacía si no existe el archivo.
     """
     path = os.path.join(HERO_SVG_DIR, filename)
     if not os.path.exists(path):
         return []
     sheet = media.load_surface(path)
-    return load_spritesheet_frames_by_count(sheet, HERO_IDLE_FRAMES, HERO_HEIGHT)
+    frame_width = HERO_SVG_SWORD_FRAME_WIDTH if 'sword' in filename else None
+    return load_spritesheet_frames_by_count(sheet, HERO_IDLE_FRAMES, HERO_HEIGHT, frame_width)
 
 
 def _load_hero_direction(direction, suffix):
     """Carga el spritesheet de una dirección: SVG si existe, si no PNG.
 
-    Los SVG se escalan a HERO_HEIGHT (128) de alto conservando la proporción.
+    Los SVG se escalan a HERO_HEIGHT (128) de alto conservando la proporción. Los
+    de espada (suffix) usan un ancho de frame fijo (HERO_SVG_SWORD_FRAME_WIDTH).
     """
     svg_path = os.path.join(HERO_SVG_DIR, f'hero_walking_{direction}{suffix}.svg')
     if os.path.exists(svg_path):
         sheet = media.load_surface(svg_path)
-        return load_spritesheet_frames_by_count(sheet, HERO_SVG_FRAMES, HERO_HEIGHT)
+        frame_width = HERO_SVG_SWORD_FRAME_WIDTH if suffix else None
+        return load_spritesheet_frames_by_count(sheet, HERO_SVG_FRAMES, HERO_HEIGHT, frame_width)
     png_path = f'assets/images/hero_walking_{direction}{suffix}.png'
     return load_spritesheet_frames(png_path, HERO_PNG_FRAME[0], HERO_PNG_FRAME[1])
 
