@@ -263,19 +263,20 @@ def load_spritesheet_frames_by_count(sheet, count, target_height):
 # Si existe resources/hero_walking_<direccion><sufijo>.svg se usa en lugar del PNG.
 HERO_SVG_DIR = 'resources'
 HERO_SVG_FRAMES = 8           # frames por spritesheet SVG
-HERO_IDLE_SVG = os.path.join(HERO_SVG_DIR, 'hero_idle.svg') # animación de reposo (vista frontal)
-HERO_IDLE_FRAMES = 4          # frames del spritesheet de reposo
+HERO_IDLE_FRAMES = 4          # frames de los spritesheets de reposo (normal y con espada)
 HERO_PNG_FRAME = (32, 64)     # ancho, alto de cada frame del PNG
 
 
-def load_idle_frames():
-    """Carga la animación de reposo del héroe (resources/hero_idle.svg).
+def load_idle_frames(filename='hero_idle.svg'):
+    """Carga una animación de reposo del héroe desde resources/ (SVG).
 
-    Devuelve una lista vacía si no existe el archivo.
+    El ancho de cada frame se deduce del alto del spritesheet conservando la
+    proporción. Devuelve una lista vacía si no existe el archivo.
     """
-    if not os.path.exists(HERO_IDLE_SVG):
+    path = os.path.join(HERO_SVG_DIR, filename)
+    if not os.path.exists(path):
         return []
-    sheet = media.load_surface(HERO_IDLE_SVG)
+    sheet = media.load_surface(path)
     return load_spritesheet_frames_by_count(sheet, HERO_IDLE_FRAMES, HERO_HEIGHT)
 
 
@@ -320,6 +321,14 @@ def hero_animation_set(player):
     if FLEE_ITEMS & set(player.get('inventory', [])):
         return player['animations_sword']
     return player['animations']
+
+
+def hero_idle_set(player):
+    """Devuelve el frameset de reposo: con espada si el héroe lleva un arma de huida
+    y existe ese spritesheet; si no, el reposo normal."""
+    if FLEE_ITEMS & set(player.get('inventory', [])) and player.get('images_idle_sword'):
+        return player['images_idle_sword']
+    return player['images_idle']
 
 
 def build_map_surface(map_data, hero):
@@ -438,7 +447,7 @@ def update_player(player, collision_rects, door_rects, current_map_data, dt):
                 player['image'] = current_images[image_index]
         else: # Parado: reproduce la animación de reposo si existe
             player['frame_index'] = 0
-            idle_frames = player['images_idle']
+            idle_frames = hero_idle_set(player)
             if idle_frames:
                 player['idle_timer'] += dt
                 idle_interval = max(1, HERO_IDLE_CYCLE_MS // len(idle_frames))
@@ -945,6 +954,7 @@ hero_images, hero_animations = load_hero_frameset()          # variante normal
 hero_images_sword, hero_animations_sword = load_hero_frameset('_sword')  # variante con espada en mano
 hero_damage_frames = load_spritesheet_frames('assets/images/hero_damage.png', 32, 64) # variante de daño
 hero_idle_frames = load_idle_frames() # animación de reposo (puede ser [])
+hero_idle_sword_frames = load_idle_frames('hero_idle_sword.svg') # reposo con espada (puede ser [])
 hero_death_image = pygame.image.load('assets/images/hero_death.png').convert_alpha()
 # El sprite de muerte viene a resolución 1:1; se escala x2 como el resto de sprites del héroe
 hero_death_image = pygame.transform.scale(hero_death_image, (hero_death_image.get_width() * 2, hero_death_image.get_height() * 2))
@@ -957,6 +967,7 @@ hero = {
     "animations_sword": hero_animations_sword,
     "images_damage": hero_damage_frames,
     "images_idle": hero_idle_frames, # Animación de reposo (vista frontal)
+    "images_idle_sword": hero_idle_sword_frames, # Animación de reposo con espada
     "direction": 'right', # Dirección actual: 'right', 'left', 'up', 'down'
     "frame_index": 0, # Frame actual de la animación
     "animation_timer": 0, # Temporizador para la animación
